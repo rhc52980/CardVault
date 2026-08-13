@@ -394,6 +394,16 @@ ASPNETCORE_URLS=http://127.0.0.1:5188 dotnet run
   as a clear message rather than breaking the page — your saved collection is
   served entirely from local data and is unaffected.
 
+## Adding it to a phone
+
+The app ships a web manifest and an apple-touch-icon, so **Add to Home Screen**
+gives you a proper icon and launches without browser chrome — which is the point
+if you're using it from the sofa while sorting cards.
+
+Icons are generated from `client/public/favicon.svg` by
+`python tools/generate-icons.py` (needs Pillow). Edit the SVG, rerun it, and the
+`.ico`, apple-touch-icon and manifest sizes all follow.
+
 ## Licence
 
 [MIT](LICENSE) — use it, change it, redistribute it, no obligations.
@@ -416,6 +426,8 @@ server/            ASP.NET Core API + static host
                    CSV parser and import jobs, want list, sales ledger, export,
                    authentication, settings, backups
   Program.cs       Minimal API endpoints
+tools/             generate-icons.py — regenerates the raster app icons from
+                   the same design as client/public/favicon.svg
 tests/             xunit tests (`dotnet test tests`) — currently the search
                    query parser, where the name-vs-number rules live
 client/            React frontend (builds into server/wwwroot)

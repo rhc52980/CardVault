@@ -2,10 +2,22 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#06070c" />
     <meta name="description" content="Browse, value and track your Pokémon TCG collection." />
+
+    <!-- SVG for browsers that take it; .ico for the ones that still ask for it
+         by default, and for OS shortcuts. -->
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" sizes="any" />
+    <link rel="icon" href="/favicon.ico" sizes="48x48" />
+
+    <!-- Without this, iOS "Add to Home Screen" uses a screenshot of the page. -->
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-title" content="Vault" />
+
+    <!-- Lets Android install it and launch without browser chrome. -->
+    <link rel="manifest" href="/site.webmanifest" />
+
     <title>Pokémon Vault</title>
   </head>
   <body>
