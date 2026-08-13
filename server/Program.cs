@@ -160,6 +160,23 @@ app.MapGet("/api/cards/{id}", async (string id, PokemonTcgClient api, CardCache 
 
 // ------------------------------------------------------- sets & set completion
 
+app.MapGet("/api/cards/{id}/history", (
+    string id, PriceSnapshotService snapshots, CollectionService collection) =>
+{
+    var series = snapshots.HistoryFor(id)
+        .Select(kv => new PriceSeries(kv.Key, kv.Value))
+        .OrderBy(s => s.Variant)
+        .ToList();
+
+    var owned = collection.List()
+        .Where(i => i.CardId == id)
+        .Select(i => i.Variant)
+        .Distinct()
+        .ToList();
+
+    return Results.Ok(new CardHistory(id, series, owned));
+});
+
 app.MapGet("/api/sets", async (SetsService sets, CancellationToken ct)
     => Results.Ok(await sets.ListAsync(ct)));
 
@@ -180,6 +197,7 @@ app.MapPost("/api/collection", async (
     CollectionService collection,
     CardCache cache,
     PokemonTcgClient api,
+    PriceSnapshotService snapshots,
     CancellationToken ct) =>
 {
     if (string.IsNullOrWhiteSpace(req.CardId)) return Results.BadRequest(new { error = "cardId is required" });
@@ -193,6 +211,10 @@ app.MapPost("/api/collection", async (
     }
 
     var id = collection.Add(req);
+
+    // Seed today's price so the card's chart isn't empty until the next daily run.
+    snapshots.RecordCurrentPrices(req.CardId);
+
     return Results.Created($"/api/collection/{id}", new { id });
 });
 
