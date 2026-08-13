@@ -18,6 +18,7 @@ import type {
   SetCard,
   SetSummary,
   UpdateEntryRequest,
+  UpdateStatus,
   UpdateWantRequest,
   WantItem,
 } from './types'
@@ -228,6 +229,10 @@ export const api = {
 
   clearApiKey() {
     return fetch('/api/settings/api-key', { method: 'DELETE' }).then(json<{ apiKey: ApiKeyStatus }>)
+  },
+
+  setUpdateCheck(enabled: boolean) {
+    return post<UpdateStatus>('/api/settings/update-check', { enabled })
   },
 
   createBackup() {

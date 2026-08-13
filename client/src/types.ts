@@ -235,12 +235,25 @@ export interface BackupInfo {
   reason: string
 }
 
+export interface UpdateStatus {
+  /** Off by default — the app makes no outbound calls you didn't ask for. */
+  enabled: boolean
+  available: boolean
+  latest?: string | null
+  releaseUrl?: string | null
+  lastCheckedUtc?: string | null
+}
+
 export interface AppSettings {
   apiKey: ApiKeyStatus
   dataDirectory: string
   migratedFromLegacy: boolean
   legacyDirectory: string
   backups: BackupInfo[]
+  /** From <Version> in the csproj; release builds append a source stamp. */
+  version: string
+  buildDate: string
+  update: UpdateStatus
 }
 
 export interface SetSummary {

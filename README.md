@@ -308,9 +308,22 @@ builds the UI and server, installs to `C:\PokemonVault`, registers a
 **PokemonVault** Windows service and starts it. From then on it runs at boot,
 before you log in. `install\Install-DesktopIcon.bat` adds a desktop shortcut.
 
-To update after pulling new code, run `install\Update-PokemonVault.bat` — it's
-the same script, and it rebuilds into wherever the service currently points
-rather than assuming the default.
+### Updating
+
+Pull the latest code and run `install\Update-PokemonVault.bat` (or
+`sudo ./linux/install.sh` again). It's the same script as the installer, and it
+rebuilds into wherever the service currently points rather than assuming the
+default — then refuses to claim success if those two ever diverge.
+
+The running version is shown next to the app name in the header, and in full on
+the Settings tab with its build date and source revision. The database is backed
+up automatically whenever that version changes, before anything else runs, so an
+update can't be the thing that loses your collection.
+
+Settings also has an **opt-in** daily check for new GitHub releases. It's off by
+default — nothing leaves the machine unless you turn it on — and it only ever
+reads: you get a badge linking to the release, and run the updater yourself.
+Bump `<Version>` in `server/PokemonVault.csproj` when you cut one.
 
 **Linux** (Debian/Ubuntu, a Proxmox container, a Pi):
 
