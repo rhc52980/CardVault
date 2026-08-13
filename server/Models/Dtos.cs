@@ -127,6 +127,10 @@ public sealed record ValuePoint(string Date, double Value);
 
 public sealed record ApiKeyRequest(string? ApiKey);
 
+public sealed record PasswordRequest(string? Password);
+
+public sealed record ChangePasswordRequest(string? CurrentPassword, string? NewPassword);
+
 public sealed record AddWantRequest(
     string CardId,
     string Variant = "normal",
