@@ -25,11 +25,35 @@ Card artwork, set details, attack stats and market prices come from
   everything missing greyed out, with what it would cost to finish.
 - **Bulk imports a CSV** of an existing collection, matching each row against the
   catalogue and letting you review every match before anything is saved.
+- **Charts each card's price over time**, built from history the app records
+  itself.
 - **Records its own price history.** The API only ever reports today's price, so
   the app snapshots prices daily into SQLite. After a few days the value trend
   chart fills in — that's data the API cannot give you retroactively.
 - **Caches everything locally.** Card metadata goes in SQLite and artwork on disk
   on first fetch, so the collection loads instantly and works offline.
+
+## Price charts
+
+Every card's detail view charts its market price over time, one line per
+printing, with a crosshair and tooltip reading out all printings at the hovered
+date. Printings you own are drawn first. A **show table** toggle lists the same
+numbers, so nothing is reachable only by hovering.
+
+A card gets its first price point the moment you add it, rather than waiting for
+the next daily cycle — otherwise a card added in the morning would show an empty
+chart all day. Until there are two days the chart shows today's figure and says
+when the line will start.
+
+**History only goes back as far as you do.** pokemontcg.io publishes today's
+price and nothing else, so these charts begin the day a card enters your
+collection and get more useful the longer the app runs. There's no way to
+backfill.
+
+The chart's four series colours are darker steps of the app's palette, validated
+for lightness, chroma, colourblind separation and contrast against the chart
+surface rather than picked by eye. A card with more than four priced printings
+shows the first four and says so.
 
 ## Selling, and the sold ledger
 
@@ -272,6 +296,6 @@ server/            ASP.NET Core API + static host
                    settings, backups
   Program.cs       Minimal API endpoints
 client/            React frontend (builds into server/wwwroot)
-  src/components/  Card grid, search, set browser, detail modal, stats,
-                   CSV import, manual entry, settings
+  src/components/  Card grid, search, set browser, detail modal, price chart,
+                   stats, CSV import, manual entry, sell + sold ledger, settings
 ```

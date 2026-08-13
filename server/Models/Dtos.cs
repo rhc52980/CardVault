@@ -123,6 +123,16 @@ public sealed record ValuePoint(string Date, double Value);
 
 public sealed record ApiKeyRequest(string? ApiKey);
 
+public sealed record PricePoint(string Date, double Market, double? Low, double? High);
+
+public sealed record PriceSeries(string Variant, IReadOnlyList<PricePoint> Points);
+
+public sealed record CardHistory(
+    string CardId,
+    IReadOnlyList<PriceSeries> Series,
+    /// <summary>Printings you actually own, so the chart can default to one of those.</summary>
+    IReadOnlyList<string> OwnedVariants);
+
 /// <summary>Selling some or all of a collection entry.</summary>
 public sealed record SellRequest(
     int Quantity,

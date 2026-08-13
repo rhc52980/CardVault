@@ -1,5 +1,6 @@
 using System.Text.Json;
 using PokemonVault.Data;
+using PokemonVault.Models;
 
 namespace PokemonVault.Services;
 
@@ -85,6 +86,57 @@ public sealed class PriceSnapshotService(
         }
 
         return captured;
+    }
+
+    /// <summary>
+    /// Writes today's prices for a single card straight from what's already cached.
+    ///
+    /// Called when a card is added so its chart has a point immediately. Without
+    /// this the first data point wouldn't appear until the next daily cycle, and a
+    /// card added this morning would show an empty chart all day.
+    /// </summary>
+    public void RecordCurrentPrices(string cardId)
+    {
+        var payload = cache.GetPayload(cardId);
+        if (payload is null) return;
+
+        using var doc = JsonDocument.Parse(payload);
+        var card = doc.RootElement;
+        var today = DateTime.UtcNow.ToString("yyyy-MM-dd");
+
+        foreach (var variant in Pricing.AvailableVariants(card))
+            RecordSnapshot(cardId, variant, today, Pricing.ForVariant(card, variant));
+    }
+
+    /// <summary>Price points for one card, newest last, grouped by printing.</summary>
+    public Dictionary<string, List<PricePoint>> HistoryFor(string cardId)
+    {
+        using var conn = db.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = """
+            SELECT variant, captured_on, market, low, high
+            FROM price_history
+            WHERE card_id = $cardId AND market IS NOT NULL
+            ORDER BY captured_on
+            """;
+        cmd.Parameters.AddWithValue("$cardId", cardId);
+
+        var series = new Dictionary<string, List<PricePoint>>();
+        using var r = cmd.ExecuteReader();
+        while (r.Read())
+        {
+            var variant = r.GetString(0);
+            if (!series.TryGetValue(variant, out var points))
+                series[variant] = points = [];
+
+            points.Add(new PricePoint(
+                Date: r.GetString(1),
+                Market: r.GetDouble(2),
+                Low: r.IsDBNull(3) ? null : r.GetDouble(3),
+                High: r.IsDBNull(4) ? null : r.GetDouble(4)));
+        }
+
+        return series;
     }
 
     private List<string> OwnedCardIds()

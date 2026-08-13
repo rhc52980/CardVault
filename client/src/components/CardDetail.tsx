@@ -3,6 +3,7 @@ import { api, cardImage, money } from '../api'
 import { prettyVariant, rarityClass, typeClass } from '../lib/cardStyles'
 import type { CollectionItem, FullCard } from '../types'
 import { Modal } from './Modal'
+import { PriceChart } from './PriceChart'
 import { SellDialog } from './SellDialog'
 
 export function CardDetail({
@@ -118,6 +119,14 @@ export function CardDetail({
                 View on TCGplayer ↗
               </a>
             )}
+          </section>
+
+          {/* --------------------------------------------------- price history */}
+          <section>
+            <h3 className="mb-2 text-[11px] tracking-wider text-mute uppercase">
+              Market price over time
+            </h3>
+            <PriceChart cardId={cardId} ownedVariants={owned.map((o) => o.variant)} />
           </section>
 
           {/* ------------------------------------------------------ card stats */}
