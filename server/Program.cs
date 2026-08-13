@@ -5,7 +5,25 @@ using PokemonVault.Data;
 using PokemonVault.Models;
 using PokemonVault.Services;
 
-var builder = WebApplication.CreateBuilder(args);
+// The content root has to be the binary's own folder, not the working
+// directory: a service starts in system32, and the exe can be launched from
+// anywhere, but wwwroot and appsettings always sit next to it.
+//
+// This must be set through WebApplicationOptions. Doing it afterwards via
+// builder.Host.UseContentRoot() throws at startup the moment the two paths
+// actually differ — "Changing the host configuration using
+// WebApplicationBuilder.Host is not supported" — which is exactly the case
+// this is meant to handle.
+var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+{
+    Args = args,
+    ContentRootPath = AppContext.BaseDirectory,
+});
+
+// Lets the same binary run as a Windows service, a systemd unit, or straight
+// from a terminal — both calls are no-ops when not started that way.
+builder.Host.UseWindowsService(o => o.ServiceName = "PokemonVault");
+builder.Host.UseSystemd();
 
 builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: true);
 builder.Configuration.AddEnvironmentVariables();
@@ -410,7 +428,7 @@ app.MapGet("/api/settings", (SettingsService settings, DataPaths paths, BackupSe
     apiKey = settings.GetApiKeyStatus(),
     dataDirectory = paths.Root,
     migratedFromLegacy = paths.MigratedFromLegacy,
-    legacyDirectory = DataPaths.LegacyDirectory,
+    legacyDirectory = paths.MigratedFrom ?? DataPaths.LegacyDirectory,
     backups = backups.List(),
 }));
 

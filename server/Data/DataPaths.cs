@@ -20,6 +20,7 @@ public sealed class DataPaths
     public static string LegacyDirectory => Path.Combine(AppContext.BaseDirectory, "data");
 
     public bool MigratedFromLegacy { get; private set; }
+    public string? MigratedFrom { get; private set; }
 
     public DataPaths(IConfiguration config, ILogger<DataPaths> log)
     {
@@ -33,13 +34,22 @@ public sealed class DataPaths
         log.LogInformation("Collection data directory: {Root}", Root);
     }
 
-    private static string Resolve(IConfiguration config)
+    /// <summary>
+    /// Places an existing collection might be, in the order we'd trust them.
+    ///
+    /// The per-user path matters once the app runs as a service: a service account
+    /// has its own LOCALAPPDATA, so it would resolve to a different folder and come
+    /// up with an empty collection while yours sat untouched next door. Installing
+    /// pins an explicit directory, and this brings the existing data across to it.
+    /// </summary>
+    private static IEnumerable<string> LegacyCandidates()
     {
-        var configured = config["PokemonVault:DataDirectory"] ?? config["POKEMONVAULT_DATA_DIR"];
-        if (!string.IsNullOrWhiteSpace(configured)) return Path.GetFullPath(configured.Trim());
+        yield return LegacyDirectory;
+        yield return DefaultUserDirectory();
+    }
 
-        // LocalApplicationData maps to %LOCALAPPDATA% on Windows and
-        // ~/.local/share on Linux and macOS.
+    private static string DefaultUserDirectory()
+    {
         var baseDir = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         if (string.IsNullOrWhiteSpace(baseDir))
         {
@@ -47,8 +57,17 @@ public sealed class DataPaths
                 Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
                 ".local", "share");
         }
-
         return Path.Combine(baseDir, "PokemonVault");
+    }
+
+    private static string Resolve(IConfiguration config)
+    {
+        var configured = config["PokemonVault:DataDirectory"] ?? config["POKEMONVAULT_DATA_DIR"];
+        if (!string.IsNullOrWhiteSpace(configured)) return Path.GetFullPath(configured.Trim());
+
+        // LocalApplicationData maps to %LOCALAPPDATA% on Windows and
+        // ~/.local/share on Linux and macOS.
+        return DefaultUserDirectory();
     }
 
     /// <summary>
@@ -60,13 +79,16 @@ public sealed class DataPaths
     {
         try
         {
-            var legacy = LegacyDirectory;
+            // Never overwrite a collection that's already here.
+            if (File.Exists(DatabaseFile)) return;
+
+            var legacy = LegacyCandidates().FirstOrDefault(candidate =>
+                File.Exists(Path.Combine(candidate, "vault.db"))
+                && Path.GetFullPath(candidate) != Path.GetFullPath(Root));
+
+            if (legacy is null) return;
+
             var legacyDb = Path.Combine(legacy, "vault.db");
-
-            // Only migrate into a genuinely empty destination.
-            if (!File.Exists(legacyDb) || File.Exists(DatabaseFile)) return;
-            if (Path.GetFullPath(legacy) == Path.GetFullPath(Root)) return;
-
             log.LogInformation("Found a collection at {Legacy}; copying it to {Root}", legacy, Root);
 
             foreach (var suffix in new[] { "", "-wal", "-shm" })
@@ -86,6 +108,7 @@ public sealed class DataPaths
             }
 
             MigratedFromLegacy = true;
+            MigratedFrom = legacy;
             log.LogInformation(
                 "Collection migrated. The old copy at {Legacy} was left in place and can be deleted once you're happy.",
                 legacy);
@@ -93,7 +116,7 @@ public sealed class DataPaths
         catch (Exception e)
         {
             log.LogError(e, "Could not migrate the existing collection — starting with an empty one. "
-                            + "Your old data is untouched at {Legacy}", LegacyDirectory);
+                            + "Your old data is untouched.");
         }
     }
 }
