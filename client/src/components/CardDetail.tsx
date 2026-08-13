@@ -211,6 +211,19 @@ function OwnedRow({ entry, onChanged }: { entry: CollectionItem; onChanged: () =
   const [selling, setSelling] = useState(false)
   const [editingValue, setEditingValue] = useState(false)
   const [draftValue, setDraftValue] = useState(String(entry.manualValue ?? ''))
+  const [editingLocation, setEditingLocation] = useState(false)
+  const [draftLocation, setDraftLocation] = useState(entry.location ?? '')
+
+  async function saveLocation() {
+    setBusy(true)
+    try {
+      await api.update(entry.id, { location: draftLocation.trim() })
+      setEditingLocation(false)
+      onChanged()
+    } finally {
+      setBusy(false)
+    }
+  }
 
   async function saveValue() {
     setBusy(true)
@@ -315,6 +328,45 @@ function OwnedRow({ entry, onChanged }: { entry: CollectionItem; onChanged: () =
             className="mt-1 text-xs text-arc transition hover:underline"
           >
             {entry.manualValue != null ? 'Edit your value' : 'Set your own value'}
+          </button>
+        )}
+
+        {editingLocation ? (
+          <div className="mt-2 flex items-center gap-2">
+            <input
+              autoFocus
+              value={draftLocation}
+              onChange={(e) => setDraftLocation(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') void saveLocation()
+                if (e.key === 'Escape') setEditingLocation(false)
+              }}
+              placeholder="Binder 3, page 4"
+              className="w-52 rounded-md border border-edge bg-abyss px-2 py-1 text-xs text-bright outline-none focus:border-arc"
+            />
+            <button
+              onClick={saveLocation}
+              disabled={busy}
+              className="rounded-md bg-arc px-2.5 py-1 text-xs text-white transition hover:brightness-110 disabled:opacity-40"
+            >
+              Save
+            </button>
+            <button
+              onClick={() => setEditingLocation(false)}
+              className="rounded-md px-2 py-1 text-xs text-mute transition hover:text-bright"
+            >
+              Cancel
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => {
+              setDraftLocation(entry.location ?? '')
+              setEditingLocation(true)
+            }}
+            className="mt-1 block text-xs text-mute transition hover:text-arc"
+          >
+            {entry.location ? `📍 ${entry.location}` : '📍 Where is it?'}
           </button>
         )}
 

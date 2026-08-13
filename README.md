@@ -15,6 +15,10 @@ Card artwork, set details, attack stats and market prices come from
   grade, quantity and what you paid.
 - **Values your collection** against TCGplayer market prices, including
   unrealised gain against purchase price.
+- **Tracks where cards physically are**, so the app can tell you not just what you
+  own but where to find it.
+- **Keeps a want list** with the price you'd pay, and flags cards when the market
+  reaches it.
 - **Keeps a sold ledger** so profit you actually banked isn't lost when a card
   leaves the collection.
 - **Exports everything** as CSV or JSON, so your data is never trapped in here.
@@ -32,6 +36,34 @@ Card artwork, set details, attack stats and market prices come from
   chart fills in — that's data the API cannot give you retroactively.
 - **Caches everything locally.** Card metadata goes in SQLite and artwork on disk
   on first fetch, so the collection loads instantly and works offline.
+
+## Where your cards are
+
+Every entry can carry a free-text location — "Binder 3, page 4", "Box A", "Safe
+deposit box". Set it when adding a card, or click **Where is it?** on any entry
+in the card detail view. It shows on the card tile and is searchable, and a
+location dropdown appears in the vault toolbar once anything has one, including
+a **No location set** option for finding the stragglers.
+
+Locations come through CSV import too — the column can be called `Location`,
+`Storage`, `Binder`, `Box`, `Where`, `Stored` or `Placement` — and are included
+in the CSV export.
+
+## Want list
+
+Cards you're hunting live under **My vault → Wanted**. Add them from the
+**Want** button on any search result, then set the price you'd be willing to
+pay.
+
+Because the app already checks prices daily, it can tell you when one comes
+down to your number: cards at or below target are pulled to the top of the list,
+ringed in green, and counted in a banner. Wanted cards are included in the daily
+price refresh for exactly this reason — a target is only useful against a
+current price.
+
+When you find one, **Got it** moves it straight into your collection, carrying
+the printing across and capturing what you actually paid, then takes it off the
+list. Search results badge cards already on the list so you don't add them twice.
 
 ## Price charts
 
@@ -166,6 +198,7 @@ optional:
 | Purchase Price | paid, cost, buy price |
 | Purchase Date | acquired, date added |
 | Card ID | a pokemontcg.io id such as `base1-4` |
+| Location | storage, binder, box, where, stored, placement |
 | Notes | note, comment |
 
 Values are normalised on the way in: `$250.00` becomes 250, `Lightly Played` and
@@ -287,15 +320,16 @@ fully self-contained — no .NET runtime install required on the target machine.
 ```
 server/            ASP.NET Core API + static host
   Data/DataPaths.cs  Resolves the per-user data directory, migrates old installs
-  Data/Db.cs       SQLite schema: cards, collection, sales, price_history,
-                   sets, settings, plus additive migrations for existing
-                   databases
+  Data/Db.cs       SQLite schema: cards, collection, wants, sales,
+                   price_history, sets, settings, plus additive migrations for
+                   existing databases
   Services/        API client, card cache, collection, pricing, image cache,
                    daily price snapshots, sets + completion, custom items,
-                   CSV parser and import jobs, sales ledger, export,
+                   CSV parser and import jobs, want list, sales ledger, export,
                    settings, backups
   Program.cs       Minimal API endpoints
 client/            React frontend (builds into server/wwwroot)
   src/components/  Card grid, search, set browser, detail modal, price chart,
-                   stats, CSV import, manual entry, sell + sold ledger, settings
+                   stats, CSV import, manual entry, want list, sell + sold
+                   ledger, settings
 ```

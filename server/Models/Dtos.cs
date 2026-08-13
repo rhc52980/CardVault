@@ -9,7 +9,8 @@ public sealed record AddEntryRequest(
     double? PurchasePrice = null,
     string? PurchaseDate = null,
     string? Notes = null,
-    double? ManualValue = null);
+    double? ManualValue = null,
+    string? Location = null);
 
 public sealed record UpdateEntryRequest(
     int? Quantity = null,
@@ -20,6 +21,7 @@ public sealed record UpdateEntryRequest(
     string? PurchaseDate = null,
     string? Notes = null,
     double? ManualValue = null,
+    string? Location = null,
     /// <summary>Set true to clear a manual value and fall back to market price.</summary>
     bool ClearManualValue = false);
 
@@ -72,7 +74,9 @@ public sealed record CollectionItem(
     /// <summary>Your own valuation, which wins over market price when set.</summary>
     double? ManualValue,
     /// <summary>True for items you entered by hand rather than from the catalogue.</summary>
-    bool IsCustom);
+    bool IsCustom,
+    /// <summary>Where the card physically lives, so you can actually find it.</summary>
+    string? Location);
 
 public sealed record CollectionStats(
     int DistinctCards,
@@ -122,6 +126,41 @@ public sealed record SetCard(
 public sealed record ValuePoint(string Date, double Value);
 
 public sealed record ApiKeyRequest(string? ApiKey);
+
+public sealed record AddWantRequest(
+    string CardId,
+    string Variant = "normal",
+    double? TargetPrice = null,
+    int Quantity = 1,
+    string? Notes = null);
+
+public sealed record UpdateWantRequest(
+    double? TargetPrice = null,
+    int? Quantity = null,
+    string? Notes = null,
+    string? Variant = null,
+    /// <summary>Set true to drop the target so the card is simply "wanted".</summary>
+    bool ClearTarget = false);
+
+public sealed record WantItem(
+    long Id,
+    string CardId,
+    string Name,
+    string? SetName,
+    string? Number,
+    string? Rarity,
+    string? ImageSmall,
+    string Variant,
+    IReadOnlyList<string> Variants,
+    int Quantity,
+    double? TargetPrice,
+    string? Notes,
+    string AddedAt,
+    double? MarketPrice,
+    /// <summary>Market minus target — negative means it's going for less than you'd pay.</summary>
+    double? DifferenceToTarget,
+    /// <summary>True when the market has come down to your price.</summary>
+    bool AtOrBelowTarget);
 
 public sealed record PricePoint(string Date, double Market, double? Low, double? High);
 

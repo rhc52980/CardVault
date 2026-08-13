@@ -25,6 +25,7 @@ export function AddCardDialog({
   const [purchasePrice, setPurchasePrice] = useState('')
   const [purchaseDate, setPurchaseDate] = useState('')
   const [notes, setNotes] = useState('')
+  const [location, setLocation] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -42,6 +43,7 @@ export function AddCardDialog({
         purchasePrice: purchasePrice.trim() === '' ? null : Number(purchasePrice),
         purchaseDate: purchaseDate || null,
         notes: notes.trim() || null,
+        location: location.trim() || null,
       })
       onAdded()
       onClose()
@@ -153,6 +155,19 @@ export function AddCardDialog({
               className={field}
               value={purchaseDate}
               onChange={(e) => setPurchaseDate(e.target.value)}
+            />
+          </div>
+
+          <div className="col-span-2">
+            <label className={label} htmlFor="location">
+              Location <span className="normal-case">(optional)</span>
+            </label>
+            <input
+              id="location"
+              className={field}
+              placeholder="Binder 3, page 4"
+              value={location}
+              onChange={(e) => setLocation(e.target.value)}
             />
           </div>
 

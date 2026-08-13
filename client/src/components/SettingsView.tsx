@@ -68,14 +68,7 @@ function ApiKeyCard({ settings, onChanged }: { settings: AppSettings; onChanged:
       )
       onChanged()
     } catch (e) {
-      const raw = e instanceof Error ? e.message : 'Could not save that key'
-      let text = raw
-      try {
-        text = JSON.parse(raw).error ?? raw
-      } catch {
-        /* not JSON — show as-is */
-      }
-      setMessage({ kind: 'error', text })
+      setMessage({ kind: 'error', text: e instanceof Error ? e.message : 'Could not save that key' })
     } finally {
       setBusy(false)
     }

@@ -99,6 +99,20 @@ public sealed class Db
                 cached_at    TEXT NOT NULL
             );
 
+            -- Cards you're hunting for. One row per card + printing, with the price
+            -- you'd be willing to pay so the app can tell you when the market
+            -- reaches it.
+            CREATE TABLE IF NOT EXISTS wants (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                card_id      TEXT NOT NULL REFERENCES cards(id),
+                variant      TEXT NOT NULL DEFAULT 'normal',
+                target_price REAL,
+                quantity     INTEGER NOT NULL DEFAULT 1,
+                notes        TEXT,
+                added_at     TEXT NOT NULL,
+                UNIQUE(card_id, variant)
+            );
+
             -- Cards you've sold or otherwise parted with.
             --
             -- Card details are copied in rather than joined: a sold custom item's
@@ -151,6 +165,10 @@ public sealed class Db
         // Marks synthetic cards (sealed product, anything not in the catalogue) so
         // they can be skipped by price refreshes and set completion.
         AddColumn(conn, "cards", "is_custom", "INTEGER NOT NULL DEFAULT 0");
+
+        // Where the card physically is — "Binder 3, page 4", "Box A", "Safe".
+        // The app knows what you own; this is so you can also find it.
+        AddColumn(conn, "collection", "location", "TEXT");
     }
 
     private static void AddColumn(SqliteConnection conn, string table, string column, string definition)

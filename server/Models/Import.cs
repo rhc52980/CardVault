@@ -57,6 +57,7 @@ public sealed class ImportRow
     public double? PurchasePrice { get; set; }
     public string? PurchaseDate { get; set; }
     public string? Notes { get; set; }
+    public string? Location { get; set; }
 
     public List<CardCandidate> Candidates { get; set; } = [];
 }
@@ -83,6 +84,7 @@ public sealed record CommitRow(
     string? Grade = null,
     double? PurchasePrice = null,
     string? PurchaseDate = null,
-    string? Notes = null);
+    string? Notes = null,
+    string? Location = null);
 
 public sealed record CommitRequest(IReadOnlyList<CommitRow> Rows);

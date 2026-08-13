@@ -1,5 +1,6 @@
 import type {
   AddEntryRequest,
+  AddWantRequest,
   ApiKeyStatus,
   AppSettings,
   BackupInfo,
@@ -15,14 +16,31 @@ import type {
   SetCard,
   SetSummary,
   UpdateEntryRequest,
+  UpdateWantRequest,
+  WantItem,
 } from './types'
 
 async function json<T>(res: Response): Promise<T> {
-  if (!res.ok) {
-    const body = await res.text().catch(() => '')
-    throw new Error(body || `${res.status} ${res.statusText}`)
-  }
+  if (!res.ok) throw new Error(await errorMessage(res))
   return res.json() as Promise<T>
+}
+
+/**
+ * The server reports failures as {"error": "..."}. Unwrap it here so callers can
+ * show err.message directly — otherwise raw JSON ends up on screen.
+ */
+async function errorMessage(res: Response): Promise<string> {
+  const body = await res.text().catch(() => '')
+  if (body) {
+    try {
+      const parsed = JSON.parse(body)
+      if (typeof parsed?.error === 'string') return parsed.error
+    } catch {
+      // Not JSON — fall through and use the raw body.
+    }
+    return body
+  }
+  return `${res.status} ${res.statusText}`
 }
 
 export interface SearchResponse {
@@ -96,6 +114,41 @@ export const api = {
 
   snapshot() {
     return fetch('/api/prices/snapshot', { method: 'POST' }).then(json<{ captured: number }>)
+  },
+
+  wants() {
+    return fetch('/api/wants').then(json<WantItem[]>)
+  },
+
+  addWant(req: AddWantRequest) {
+    return fetch('/api/wants', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(req),
+    }).then(json<{ id: number }>)
+  },
+
+  async updateWant(id: number, patch: UpdateWantRequest) {
+    const res = await fetch(`/api/wants/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch),
+    })
+    if (!res.ok) throw new Error('Could not update that want')
+  },
+
+  async removeWant(id: number) {
+    const res = await fetch(`/api/wants/${id}`, { method: 'DELETE' })
+    if (!res.ok) throw new Error('Could not remove that want')
+  },
+
+  /** Found one — moves it from the want list into the collection. */
+  acquireWant(id: number, entry: Omit<AddEntryRequest, 'cardId'>) {
+    return fetch(`/api/wants/${id}/acquire`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cardId: '', ...entry }),
+    }).then(json<{ entryId: number }>)
   },
 
   cardHistory(cardId: string) {
