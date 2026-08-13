@@ -135,15 +135,18 @@ app.Use(async (ctx, next) =>
 // ---------------------------------------------------------------- card search
 
 app.MapGet("/api/search", async (
-    string? q,
-    string? set,
-    int page,
-    int pageSize,
     PokemonTcgClient api,
     CardCache cache,
     CollectionService collection,
     WantsService wants,
-    CancellationToken ct) =>
+    CancellationToken ct,
+    string? q = null,
+    string? set = null,
+    // Paging must have defaults. Declared as bare ints, a request that omits them
+    // is rejected by model binding with an empty 400 before the handler ever runs
+    // — a baffling response to `/api/search?q=charizard`.
+    int page = 1,
+    int pageSize = 24) =>
 {
     var query = SearchQuery.Build(q, set);
     if (query is null) return Results.Ok(new { data = Array.Empty<object>(), totalCount = 0, page = 1 });
