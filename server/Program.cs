@@ -34,6 +34,7 @@ builder.Services.AddHostedService(sp => sp.GetRequiredService<PriceSnapshotServi
 builder.Services.AddSingleton<ImportService>();
 builder.Services.AddSingleton<SetsService>();
 builder.Services.AddSingleton<SalesService>();
+builder.Services.AddSingleton<WantsService>();
 builder.Services.AddSingleton<ExportService>();
 builder.Services.AddHttpClient<CustomItemService>(c => c.Timeout = TimeSpan.FromSeconds(30));
 
@@ -113,6 +114,7 @@ app.MapGet("/api/search", async (
     PokemonTcgClient api,
     CardCache cache,
     CollectionService collection,
+    WantsService wants,
     CancellationToken ct) =>
 {
     var query = BuildQuery(q, set);
@@ -125,12 +127,13 @@ app.MapGet("/api/search", async (
     var cards = data.EnumerateArray().Select(c => c.Clone()).ToList();
     cache.UpsertMany(cards);
 
-    // So the UI can badge results you already own.
+    // So the UI can badge results you already own or are hunting for.
     var owned = collection.List()
         .GroupBy(i => i.CardId)
         .ToDictionary(g => g.Key, g => g.Sum(i => i.Quantity));
+    var wanted = wants.WantedIds();
 
-    var results = cards.Select(c => Summarize(c, owned)).ToList();
+    var results = cards.Select(c => Summarize(c, owned, wanted)).ToList();
 
     return Results.Ok(new
     {
@@ -226,6 +229,43 @@ app.MapDelete("/api/collection/{id:long}", (long id, CollectionService collectio
     if (!collection.Delete(id)) return Results.NotFound();
     custom.CleanUpOrphans();
     return Results.NoContent();
+});
+
+// ---------------------------------------------------------------- want list
+
+app.MapGet("/api/wants", (WantsService wants) => Results.Ok(wants.List()));
+
+app.MapPost("/api/wants", async (
+    AddWantRequest req, WantsService wants, CardCache cache, PokemonTcgClient api,
+    PriceSnapshotService snapshots, CancellationToken ct) =>
+{
+    if (string.IsNullOrWhiteSpace(req.CardId)) return Results.BadRequest(new { error = "cardId is required" });
+
+    if (!cache.Has(req.CardId))
+    {
+        var fetched = await api.GetCardAsync(req.CardId, ct);
+        if (fetched is null) return Results.NotFound(new { error = $"Unknown card '{req.CardId}'" });
+        cache.Upsert(fetched.Value);
+    }
+
+    var id = wants.Add(req);
+
+    // Start its price history now, same as owning it would.
+    snapshots.RecordCurrentPrices(req.CardId);
+
+    return Results.Created($"/api/wants/{id}", new { id });
+});
+
+app.MapPatch("/api/wants/{id:long}", (long id, UpdateWantRequest req, WantsService wants)
+    => wants.Update(id, req) ? Results.NoContent() : Results.NotFound());
+
+app.MapDelete("/api/wants/{id:long}", (long id, WantsService wants)
+    => wants.Delete(id) ? Results.NoContent() : Results.NotFound());
+
+app.MapPost("/api/wants/{id:long}/acquire", (long id, AddEntryRequest req, WantsService wants) =>
+{
+    var (ok, error, entryId) = wants.Acquire(id, req);
+    return ok ? Results.Ok(new { entryId }) : Results.BadRequest(new { error });
 });
 
 // ------------------------------------------------------------- sales & export
@@ -428,7 +468,7 @@ static string? BuildQuery(string? q, string? set)
     return parts.Count == 0 ? null : string.Join(" ", parts);
 }
 
-static object Summarize(JsonElement card, IReadOnlyDictionary<string, int> owned)
+static object Summarize(JsonElement card, IReadOnlyDictionary<string, int> owned, IReadOnlySet<string> wanted)
 {
     var id = card.TryGetProperty("id", out var i) ? i.GetString() ?? "" : "";
     var set = card.TryGetProperty("set", out var s) ? s : default;
@@ -458,6 +498,7 @@ static object Summarize(JsonElement card, IReadOnlyDictionary<string, int> owned
         variants = Pricing.AvailableVariants(card),
         pricesUpdatedAt = Pricing.TcgUpdatedAt(card),
         ownedQuantity = owned.TryGetValue(id, out var n) ? n : 0,
+        isWanted = wanted.Contains(id),
     };
 
     static string? Text(JsonElement el, string prop)

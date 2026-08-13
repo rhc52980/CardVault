@@ -23,15 +23,15 @@ public sealed class ExportService(CollectionService collection, SalesService sal
         var sb = new StringBuilder();
         sb.AppendLine(string.Join(",",
             "Card ID", "Name", "Set", "Number", "Quantity", "Variant", "Condition", "Grade",
-            "Purchase Price", "Purchase Date", "Notes", "Market Price", "Your Value", "Line Value",
-            "Rarity", "Hand Entered"));
+            "Purchase Price", "Purchase Date", "Location", "Notes", "Market Price", "Your Value",
+            "Line Value", "Rarity", "Hand Entered"));
 
         foreach (var i in collection.List().OrderBy(i => i.SetName).ThenBy(i => i.Name))
         {
             sb.AppendLine(string.Join(",",
                 Q(i.CardId), Q(i.Name), Q(i.SetName), Q(i.Number), N(i.Quantity), Q(i.Variant),
-                Q(i.Condition), Q(i.Grade), N(i.PurchasePrice), Q(i.PurchaseDate), Q(i.Notes),
-                N(i.MarketPrice), N(i.ManualValue), N(i.LineValue), Q(i.Rarity),
+                Q(i.Condition), Q(i.Grade), N(i.PurchasePrice), Q(i.PurchaseDate), Q(i.Location),
+                Q(i.Notes), N(i.MarketPrice), N(i.ManualValue), N(i.LineValue), Q(i.Rarity),
                 i.IsCustom ? "yes" : "no"));
         }
 

@@ -51,12 +51,7 @@ export function SellDialog({
       onSold()
       onClose()
     } catch (err) {
-      const raw = err instanceof Error ? err.message : 'Could not record that sale'
-      try {
-        setError(JSON.parse(raw).error ?? raw)
-      } catch {
-        setError(raw)
-      }
+      setError(err instanceof Error ? err.message : 'Could not record that sale')
       setSaving(false)
     }
   }

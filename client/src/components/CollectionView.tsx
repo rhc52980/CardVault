@@ -6,6 +6,7 @@ import { CardDetail } from './CardDetail'
 import { CardTile } from './CardTile'
 import { ManualEntryDialog } from './ManualEntryDialog'
 import { SoldView } from './SoldView'
+import { WantedView } from './WantedView'
 
 type SortKey = 'value' | 'name' | 'set' | 'added' | 'rarity'
 
@@ -38,13 +39,19 @@ export function CollectionView({
   const [manualOpen, setManualOpen] = useState(false)
   // Owned and sold are two views of the same collection, so they share a screen
   // rather than eating another slot in the top nav.
-  const [pane, setPane] = useState<'owned' | 'sold'>('owned')
+  const [pane, setPane] = useState<'owned' | 'wanted' | 'sold'>('owned')
+  const [locationFilter, setLocationFilter] = useState('')
 
   const sets = useMemo(() => {
     const seen = new Map<string, string>()
     for (const i of items) if (i.setId && i.setName) seen.set(i.setId, i.setName)
     return [...seen.entries()].sort((a, b) => a[1].localeCompare(b[1]))
   }, [items])
+
+  const locations = useMemo(
+    () => [...new Set(items.map((i) => i.location).filter((l): l is string => !!l))].sort(),
+    [items],
+  )
 
   const visible = useMemo(() => {
     const term = filter.trim().toLowerCase()
@@ -56,11 +63,18 @@ export function CollectionView({
           i.name.toLowerCase().includes(term) ||
           i.setName?.toLowerCase().includes(term) ||
           i.rarity?.toLowerCase().includes(term) ||
-          i.number?.toLowerCase().includes(term),
+          i.number?.toLowerCase().includes(term) ||
+          i.location?.toLowerCase().includes(term),
       )
     }
 
     if (setFilter_) out = out.filter((i) => i.setId === setFilter_)
+    if (locationFilter) {
+      out =
+        locationFilter === '__none__'
+          ? out.filter((i) => !i.location)
+          : out.filter((i) => i.location === locationFilter)
+    }
 
     const sorted = [...out]
     sorted.sort((a, b) => {
@@ -79,7 +93,7 @@ export function CollectionView({
       }
     })
     return sorted
-  }, [items, filter, setFilter_, sort])
+  }, [items, filter, setFilter_, locationFilter, sort])
 
   const ownedForDetail = detailCardId ? items.filter((i) => i.cardId === detailCardId) : []
   const visibleValue = visible.reduce((sum, i) => sum + (i.lineValue ?? 0), 0)
@@ -102,6 +116,7 @@ export function CollectionView({
         {(
           [
             ['owned', 'Owned'],
+            ['wanted', 'Wanted'],
             ['sold', 'Sold'],
           ] as const
         ).map(([key, text]) => (
@@ -151,6 +166,15 @@ export function CollectionView({
       <div className="space-y-5">
         {header}
         <SoldView onChanged={onChanged} />
+      </div>
+    )
+  }
+
+  if (pane === 'wanted') {
+    return (
+      <div className="space-y-5">
+        {header}
+        <WantedView onChanged={onChanged} onGoToSearch={onGoToSearch} />
       </div>
     )
   }
@@ -206,6 +230,22 @@ export function CollectionView({
             </option>
           ))}
         </select>
+
+        {locations.length > 0 && (
+          <select
+            value={locationFilter}
+            onChange={(e) => setLocationFilter(e.target.value)}
+            className={control}
+          >
+            <option value="">Anywhere</option>
+            {locations.map((l) => (
+              <option key={l} value={l}>
+                {l}
+              </option>
+            ))}
+            <option value="__none__">No location set</option>
+          </select>
+        )}
 
         <select value={sort} onChange={(e) => setSort(e.target.value as SortKey)} className={control}>
           {SORTS.map((s) => (
@@ -276,6 +316,7 @@ export function CollectionView({
                   {item.condition}
                   {item.grade ? ` · ${item.grade}` : ''}
                 </div>
+                {item.location && <div className="truncate text-white/70">📍 {item.location}</div>}
                 {(() => {
                   // Your own valuation wins, so a slab compares against what it's
                   // really worth rather than the raw card's market price.
