@@ -140,6 +140,20 @@ public sealed class Db
 
             CREATE INDEX IF NOT EXISTS idx_sales_date ON sales(sale_date);
 
+            -- Signed-in sessions. Kept server-side rather than in a self-contained
+            -- cookie so signing out actually revokes access everywhere, including
+            -- from a device you no longer have.
+            CREATE TABLE IF NOT EXISTS sessions (
+                token       TEXT PRIMARY KEY,
+                created_at  TEXT NOT NULL,
+                expires_at  TEXT NOT NULL,
+                last_seen   TEXT NOT NULL,
+                user_agent  TEXT,
+                created_ip  TEXT
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_sessions_expiry ON sessions(expires_at);
+
             -- Small key/value store for the API key, last-run version and similar.
             -- Living in the database means settings are backed up with everything else.
             CREATE TABLE IF NOT EXISTS settings (

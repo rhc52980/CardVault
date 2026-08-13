@@ -3,6 +3,7 @@ import type {
   AddWantRequest,
   ApiKeyStatus,
   AppSettings,
+  AuthStatus,
   BackupInfo,
   CardHistory,
   CollectionItem,
@@ -13,6 +14,7 @@ import type {
   SaleRecord,
   SearchCard,
   SellRequest,
+  SessionInfo,
   SetCard,
   SetSummary,
   UpdateEntryRequest,
@@ -41,6 +43,14 @@ async function errorMessage(res: Response): Promise<string> {
     return body
   }
   return `${res.status} ${res.statusText}`
+}
+
+function post<T>(url: string, body: unknown): Promise<T> {
+  return fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  }).then(json<T>)
 }
 
 export interface SearchResponse {
@@ -170,6 +180,38 @@ export const api = {
   async deleteSale(id: number) {
     const res = await fetch(`/api/sales/${id}`, { method: 'DELETE' })
     if (!res.ok) throw new Error('Could not delete that sale record')
+  },
+
+  authStatus() {
+    return fetch('/api/auth/status').then(json<AuthStatus>)
+  },
+
+  setupPassword(password: string) {
+    return post<{ enabled: boolean }>('/api/auth/setup', { password })
+  },
+
+  login(password: string) {
+    return post<{ authenticated: boolean }>('/api/auth/login', { password })
+  },
+
+  logout() {
+    return post<{ authenticated: boolean }>('/api/auth/logout', {})
+  },
+
+  changePassword(currentPassword: string, newPassword: string) {
+    return post<{ changed: boolean }>('/api/auth/password', { currentPassword, newPassword })
+  },
+
+  disableAuth(password: string) {
+    return post<{ enabled: boolean }>('/api/auth/disable', { password })
+  },
+
+  sessions() {
+    return fetch('/api/auth/sessions').then(json<SessionInfo[]>)
+  },
+
+  revokeOtherSessions() {
+    return post<{ revoked: boolean }>('/api/auth/sessions/revoke-others', {})
   },
 
   settings() {

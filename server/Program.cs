@@ -35,6 +35,7 @@ builder.Services.AddSingleton<ImportService>();
 builder.Services.AddSingleton<SetsService>();
 builder.Services.AddSingleton<SalesService>();
 builder.Services.AddSingleton<WantsService>();
+builder.Services.AddSingleton<AuthService>();
 builder.Services.AddSingleton<ExportService>();
 builder.Services.AddHttpClient<CustomItemService>(c => c.Timeout = TimeSpan.FromSeconds(30));
 
@@ -103,6 +104,33 @@ var staticFileOptions = new StaticFileOptions
 
 app.UseDefaultFiles();
 app.UseStaticFiles(staticFileOptions);
+
+// Everything that reveals or changes collection data requires a session once a
+// password is set. The static pages stay open because the login screen itself has
+// to load, and they contain nothing but the app shell.
+app.Use(async (ctx, next) =>
+{
+    var auth = ctx.RequestServices.GetRequiredService<AuthService>();
+    var path = ctx.Request.Path;
+
+    var isProtected = path.StartsWithSegments("/api") || path.StartsWithSegments("/img");
+    var isAuthEndpoint = path.StartsWithSegments("/api/auth");
+
+    if (!auth.IsEnabled || !isProtected || isAuthEndpoint)
+    {
+        await next();
+        return;
+    }
+
+    if (auth.ValidateSession(ctx.Request.Cookies[AuthService.CookieName]))
+    {
+        await next();
+        return;
+    }
+
+    ctx.Response.StatusCode = StatusCodes.Status401Unauthorized;
+    await ctx.Response.WriteAsJsonAsync(new { error = "Sign in to continue." });
+});
 
 // ---------------------------------------------------------------- card search
 
@@ -229,6 +257,85 @@ app.MapDelete("/api/collection/{id:long}", (long id, CollectionService collectio
     if (!collection.Delete(id)) return Results.NotFound();
     custom.CleanUpOrphans();
     return Results.NoContent();
+});
+
+// ------------------------------------------------------------ authentication
+
+app.MapGet("/api/auth/status", (HttpContext ctx, AuthService auth) => Results.Ok(new
+{
+    enabled = auth.IsEnabled,
+    authenticated = !auth.IsEnabled || auth.ValidateSession(ctx.Request.Cookies[AuthService.CookieName]),
+    // Surfaced so the UI can warn when a password is being sent over plain HTTP.
+    isSecureConnection = ctx.Request.IsHttps,
+}));
+
+app.MapPost("/api/auth/setup", (HttpContext ctx, PasswordRequest req, AuthService auth) =>
+{
+    var (ok, error) = auth.SetInitialPassword(req.Password ?? "");
+    if (!ok) return Results.BadRequest(new { error });
+
+    IssueSessionCookie(ctx, auth);
+    return Results.Ok(new { enabled = true });
+});
+
+app.MapPost("/api/auth/login", (HttpContext ctx, PasswordRequest req, AuthService auth) =>
+{
+    if (!auth.IsEnabled) return Results.BadRequest(new { error = "No password is set." });
+
+    var client = ClientKey(ctx);
+    if (auth.LockoutRemaining(client) is { } wait)
+    {
+        return Results.Json(
+            new { error = $"Too many attempts. Try again in {Math.Ceiling(wait.TotalSeconds)} seconds." },
+            statusCode: StatusCodes.Status429TooManyRequests);
+    }
+
+    if (!auth.VerifyPassword(req.Password ?? ""))
+    {
+        auth.RecordFailure(client);
+        return Results.Json(new { error = "Wrong password." }, statusCode: StatusCodes.Status401Unauthorized);
+    }
+
+    auth.ClearFailures(client);
+    IssueSessionCookie(ctx, auth);
+    return Results.Ok(new { authenticated = true });
+});
+
+app.MapPost("/api/auth/logout", (HttpContext ctx, AuthService auth) =>
+{
+    if (ctx.Request.Cookies[AuthService.CookieName] is { } token) auth.RevokeSession(token);
+    ctx.Response.Cookies.Delete(AuthService.CookieName);
+    return Results.Ok(new { authenticated = false });
+});
+
+app.MapPost("/api/auth/password", (HttpContext ctx, ChangePasswordRequest req, AuthService auth) =>
+{
+    var (ok, error) = auth.ChangePassword(req.CurrentPassword ?? "", req.NewPassword ?? "");
+    if (!ok) return Results.BadRequest(new { error });
+
+    // Every session was just revoked, including this one — hand back a fresh one so
+    // changing your password doesn't sign you out of the device you're using.
+    IssueSessionCookie(ctx, auth);
+    return Results.Ok(new { changed = true });
+});
+
+app.MapPost("/api/auth/disable", (HttpContext ctx, PasswordRequest req, AuthService auth) =>
+{
+    var (ok, error) = auth.Disable(req.Password ?? "");
+    if (!ok) return Results.BadRequest(new { error });
+
+    ctx.Response.Cookies.Delete(AuthService.CookieName);
+    return Results.Ok(new { enabled = false });
+});
+
+app.MapGet("/api/auth/sessions", (HttpContext ctx, AuthService auth)
+    => Results.Ok(auth.ListSessions(ctx.Request.Cookies[AuthService.CookieName])));
+
+app.MapPost("/api/auth/sessions/revoke-others", (HttpContext ctx, AuthService auth) =>
+{
+    auth.RevokeAllSessions();
+    IssueSessionCookie(ctx, auth);
+    return Results.Ok(new { revoked = true });
 });
 
 // ---------------------------------------------------------------- want list
@@ -447,6 +554,25 @@ app.MapFallbackToFile("index.html", staticFileOptions);
 app.Run();
 
 // ---------------------------------------------------------------------- helpers
+
+static void IssueSessionCookie(HttpContext ctx, AuthService auth)
+{
+    var token = auth.CreateSession(ctx.Request.Headers.UserAgent.ToString(), ClientKey(ctx));
+
+    ctx.Response.Cookies.Append(AuthService.CookieName, token, new CookieOptions
+    {
+        HttpOnly = true,
+        // Secure is conditional on purpose: forcing it would break sign-in over
+        // plain HTTP on a home network, where the browser silently drops the
+        // cookie. Over the internet you must be on HTTPS — see the README.
+        Secure = ctx.Request.IsHttps,
+        SameSite = SameSiteMode.Lax,
+        MaxAge = TimeSpan.FromDays(30),
+        Path = "/",
+    });
+}
+
+static string ClientKey(HttpContext ctx) => ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";
 
 /// <summary>
 /// Turns whatever the user typed into a pokemontcg.io query. Free text becomes a
