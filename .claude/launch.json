@@ -4,7 +4,7 @@
     {
       "name": "vault",
       "runtimeExecutable": "dotnet",
-      "runtimeArgs": ["run", "--project", "C:\\Users\\rhc52\\dev\\Pokemon_Vault\\server\\PokemonVault.csproj"],
+      "runtimeArgs": ["run", "--project", "server/CardVault.csproj"],
       "port": 5188,
       "url": "http://localhost:5188"
     }

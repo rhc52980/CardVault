@@ -4,7 +4,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <AssemblyName>PokemonVault</AssemblyName>
+    <AssemblyName>CardVault</AssemblyName>
 
     <!-- Single source of truth for the app version. The backup service reads it
          to detect an update and snapshot the database before carrying on, so it

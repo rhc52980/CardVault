@@ -1,20 +1,20 @@
 #!/usr/bin/env bash
-# Pokémon Vault installer for Linux (Debian/Ubuntu, Proxmox containers, a Pi).
+# CardVault installer for Linux (Debian/Ubuntu, Proxmox containers, a Pi).
 #
 #   sudo ./linux/install.sh
 #
-# Builds from this source tree into /opt/pokemon-vault, installs a systemd unit
+# Builds from this source tree into /opt/card-vault, installs a systemd unit
 # and starts it. Needs the .NET SDK and Node.js on the machine.
 #
-# Your collection lives in /var/lib/pokemon-vault, outside the install folder,
+# Your collection lives in /var/lib/card-vault, outside the install folder,
 # so updates replace the app without touching your cards.
 
 set -euo pipefail
 
-APP_DIR=/opt/pokemon-vault
-DATA_DIR=/var/lib/pokemon-vault
-SERVICE=pokemon-vault
-RUN_USER=pokemonvault
+APP_DIR=/opt/card-vault
+DATA_DIR=/var/lib/card-vault
+SERVICE=card-vault
+RUN_USER=cardvault
 
 step() { printf '\n==> %s\n' "$1"; }
 
@@ -24,8 +24,8 @@ if [[ $EUID -ne 0 ]]; then
 fi
 
 SRC_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-if [[ ! -f "$SRC_ROOT/server/PokemonVault.csproj" ]]; then
-  echo "Can't find server/PokemonVault.csproj — run this from inside the repo." >&2
+if [[ ! -f "$SRC_ROOT/server/CardVault.csproj" ]]; then
+  echo "Can't find server/CardVault.csproj — run this from inside the repo." >&2
   exit 1
 fi
 step "Using source tree: $SRC_ROOT"
@@ -46,7 +46,7 @@ step "Building the web UI"
 step "Building the server"
 (cd "$SRC_ROOT/server" && dotnet publish -c Release -r linux-x64 -p:PublishSingleFile=true --self-contained true -o "$APP_DIR")
 
-[[ -x "$APP_DIR/PokemonVault" ]] || { echo "Build finished but $APP_DIR/PokemonVault is missing." >&2; exit 1; }
+[[ -x "$APP_DIR/CardVault" ]] || { echo "Build finished but $APP_DIR/CardVault is missing." >&2; exit 1; }
 [[ -f "$APP_DIR/wwwroot/index.html" ]] || { echo "Build finished but wwwroot is missing — the app would not load." >&2; exit 1; }
 
 # Service account, created once and left alone on later runs.
@@ -70,7 +70,7 @@ systemctl restart "$SERVICE"
 sleep 2
 if systemctl is-active --quiet "$SERVICE"; then
   ip=$(hostname -I 2>/dev/null | awk '{print $1}')
-  printf '\nPokémon Vault installed and running.\n'
+  printf '\nCardVault installed and running.\n'
   printf 'Collection: %s\n' "$DATA_DIR"
   printf 'Open:       http://%s:5188\n' "${ip:-localhost}"
   printf '\nIt listens on your network with no password by default —\n'

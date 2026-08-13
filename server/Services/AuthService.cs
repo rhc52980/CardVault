@@ -1,8 +1,8 @@
 using System.Collections.Concurrent;
 using System.Security.Cryptography;
-using PokemonVault.Data;
+using CardVault.Data;
 
-namespace PokemonVault.Services;
+namespace CardVault.Services;
 
 public sealed record SessionInfo(string TokenPrefix, string CreatedAt, string LastSeen, string? UserAgent, string? CreatedIp, bool IsCurrent);
 

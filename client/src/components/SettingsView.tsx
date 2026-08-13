@@ -114,7 +114,7 @@ function VersionCard({ settings, onChanged }: { settings: AppSettings; onChanged
 
       <p className="mt-3 border-t border-edge pt-3 text-xs text-mute">
         To update: pull the latest code and run{' '}
-        <code className="text-arc">install\Update-PokemonVault.bat</code> (or{' '}
+        <code className="text-arc">install\Update-CardVault.bat</code> (or{' '}
         <code className="text-arc">sudo ./linux/install.sh</code>). Your collection is outside the
         app folder and is backed up automatically whenever the version changes.
       </p>

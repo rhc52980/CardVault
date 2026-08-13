@@ -92,7 +92,7 @@ export default function App() {
             />
             <div>
               <h1 className="text-xl font-semibold tracking-tight">
-                Pokémon Vault
+                CardVault
                 {appVersion && (
                   <span
                     className="ml-2 align-middle font-mono text-[11px] font-normal text-mute"

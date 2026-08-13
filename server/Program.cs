@@ -2,9 +2,9 @@ using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Diagnostics;
-using PokemonVault.Data;
-using PokemonVault.Models;
-using PokemonVault.Services;
+using CardVault.Data;
+using CardVault.Models;
+using CardVault.Services;
 
 // Content root, which decides where wwwroot and appsettings are found.
 //
@@ -26,7 +26,7 @@ var builder = WebApplication.CreateBuilder(new WebApplicationOptions
 
 // Lets the same binary run as a Windows service, a systemd unit, or straight
 // from a terminal — both calls are no-ops when not started that way.
-builder.Host.UseWindowsService(o => o.ServiceName = "PokemonVault");
+builder.Host.UseWindowsService(o => o.ServiceName = "CardVault");
 builder.Host.UseSystemd();
 
 // App version, from <Version> in the csproj. Release builds append a source
@@ -89,7 +89,7 @@ builder.WebHost.UseUrls(builder.Configuration["Urls"] ?? "http://0.0.0.0:5188");
 
 var app = builder.Build();
 
-app.Logger.LogInformation("Pokémon Vault {Version}{Built} starting", version,
+app.Logger.LogInformation("CardVault {Version}{Built} starting", version,
     string.IsNullOrEmpty(buildDate) ? "" : $" (built {buildDate} UTC)");
 
 // Take a backup before anything else touches the data — this is the moment an
@@ -436,15 +436,15 @@ app.MapDelete("/api/sales/{id:long}", (long id, SalesService sales)
 
 app.MapGet("/api/export/collection.csv", (ExportService export) => Results.File(
     System.Text.Encoding.UTF8.GetBytes(export.CollectionCsv()), "text/csv",
-    $"pokemon-vault-collection-{DateTime.Now:yyyy-MM-dd}.csv"));
+    $"card-vault-collection-{DateTime.Now:yyyy-MM-dd}.csv"));
 
 app.MapGet("/api/export/sales.csv", (ExportService export) => Results.File(
     System.Text.Encoding.UTF8.GetBytes(export.SalesCsv()), "text/csv",
-    $"pokemon-vault-sales-{DateTime.Now:yyyy-MM-dd}.csv"));
+    $"card-vault-sales-{DateTime.Now:yyyy-MM-dd}.csv"));
 
 app.MapGet("/api/export/vault.json", (ExportService export) => Results.File(
     System.Text.Encoding.UTF8.GetBytes(export.EverythingJson()), "application/json",
-    $"pokemon-vault-{DateTime.Now:yyyy-MM-dd}.json"));
+    $"card-vault-{DateTime.Now:yyyy-MM-dd}.json"));
 
 // ------------------------------------------------------- settings & data safety
 
@@ -615,7 +615,7 @@ app.MapGet("/api/import/template", () =>
         "Charizard,Base,4,1,Holofoil,NM,250.00,1999-01-09,Childhood card\n" +
         "Pikachu,Base,58,3,Normal,LP,4.00,,\n" +
         "Charizard ex,151,6,2,Holofoil,NM,12.50,,\n";
-    return Results.File(System.Text.Encoding.UTF8.GetBytes(csv), "text/csv", "pokemon-vault-template.csv");
+    return Results.File(System.Text.Encoding.UTF8.GetBytes(csv), "text/csv", "card-vault-template.csv");
 });
 
 // ---------------------------------------------------------------- card images

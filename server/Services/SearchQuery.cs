@@ -1,6 +1,6 @@
 using System.Text.RegularExpressions;
 
-namespace PokemonVault.Services;
+namespace CardVault.Services;
 
 /// <summary>
 /// Turns what someone typed into a pokemontcg.io query.

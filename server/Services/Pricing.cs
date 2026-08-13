@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace PokemonVault.Services;
+namespace CardVault.Services;
 
 public readonly record struct PriceSet(double? Market, double? Low, double? Mid, double? High);
 

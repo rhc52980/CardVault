@@ -1,8 +1,8 @@
 using System.Text.Json;
 using Microsoft.Data.Sqlite;
-using PokemonVault.Data;
+using CardVault.Data;
 
-namespace PokemonVault.Services;
+namespace CardVault.Services;
 
 /// <summary>
 /// Local mirror of card metadata. Every card we see from the API gets stored here,

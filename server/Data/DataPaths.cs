@@ -1,4 +1,4 @@
-namespace PokemonVault.Data;
+namespace CardVault.Data;
 
 /// <summary>
 /// Decides where your collection lives — and deliberately keeps it out of the
@@ -46,9 +46,17 @@ public sealed class DataPaths
     {
         yield return LegacyDirectory;
         yield return DefaultUserDirectory();
+
+        // The app was called Pokémon Vault before, and its data folder was named
+        // to match. Without this an existing collection would simply be orphaned
+        // by the rename — the app would start empty and look like it had lost
+        // everything, with the real database sitting in a folder nothing reads.
+        yield return UserDirectoryNamed("PokemonVault");
     }
 
-    private static string DefaultUserDirectory()
+    private static string DefaultUserDirectory() => UserDirectoryNamed("CardVault");
+
+    private static string UserDirectoryNamed(string folder)
     {
         var baseDir = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         if (string.IsNullOrWhiteSpace(baseDir))
@@ -57,12 +65,12 @@ public sealed class DataPaths
                 Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
                 ".local", "share");
         }
-        return Path.Combine(baseDir, "PokemonVault");
+        return Path.Combine(baseDir, folder);
     }
 
     private static string Resolve(IConfiguration config)
     {
-        var configured = config["PokemonVault:DataDirectory"] ?? config["POKEMONVAULT_DATA_DIR"];
+        var configured = config["CardVault:DataDirectory"] ?? config["CARDVAULT_DATA_DIR"];
         if (!string.IsNullOrWhiteSpace(configured)) return Path.GetFullPath(configured.Trim());
 
         // LocalApplicationData maps to %LOCALAPPDATA% on Windows and
@@ -82,9 +90,17 @@ public sealed class DataPaths
             // Never overwrite a collection that's already here.
             if (File.Exists(DatabaseFile)) return;
 
-            var legacy = LegacyCandidates().FirstOrDefault(candidate =>
-                File.Exists(Path.Combine(candidate, "vault.db"))
-                && Path.GetFullPath(candidate) != Path.GetFullPath(Root));
+            // Pick the most recently written database, not the first candidate
+            // that happens to exist. Several of these can be present at once —
+            // an abandoned in-app folder from an old build, a previous name's
+            // folder — and taking them in a fixed order silently restored a
+            // months-stale collection over the live one.
+            var legacy = LegacyCandidates()
+                .Where(candidate =>
+                    File.Exists(Path.Combine(candidate, "vault.db"))
+                    && Path.GetFullPath(candidate) != Path.GetFullPath(Root))
+                .OrderByDescending(candidate => File.GetLastWriteTimeUtc(Path.Combine(candidate, "vault.db")))
+                .FirstOrDefault();
 
             if (legacy is null) return;
 

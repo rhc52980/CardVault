@@ -1,11 +1,11 @@
-# Pokémon Vault one-click installer/updater
-# Usage: double-click Install-PokemonVault.bat (runs this elevated), or:
+# CardVault one-click installer/updater
+# Usage: double-click Install-CardVault.bat (runs this elevated), or:
 #   powershell -ExecutionPolicy Bypass -File update.ps1
 #
 # What it does:
 #   1. Finds the source tree this script lives in
-#   2. Stops the PokemonVault service / process
-#   3. Builds the frontend, then publishes the server into C:\PokemonVault
+#   2. Stops the CardVault service / process
+#   3. Builds the frontend, then publishes the server into C:\CardVault
 #   4. Pins the data directory so the service and a manual run agree on it,
 #      migrating an existing per-user collection across on first install
 #   5. Creates or repoints the service and starts it
@@ -14,10 +14,10 @@
 # touch it. The app also snapshots the database itself whenever the version
 # changes, before anything else runs.
 
-param([string]$InstallDir = "C:\PokemonVault")
+param([string]$InstallDir = "C:\CardVault")
 
 $ErrorActionPreference = "Stop"
-$Service = "PokemonVault"
+$Service = "CardVault"
 $DataDir = Join-Path $InstallDir "data"
 $RepointService = $false
 
@@ -46,9 +46,9 @@ try {
     }
 
     # --- locate the source ---
-    $srcRoot = Split-Path $PSScriptRoot -Parent   # ...\Pokemon_Vault\install -> ...\Pokemon_Vault
-    if (-not (Test-Path (Join-Path $srcRoot "server\PokemonVault.csproj"))) {
-        throw "Can't find server\PokemonVault.csproj next to this script. Run it from inside the repo."
+    $srcRoot = Split-Path $PSScriptRoot -Parent   # ...<repo>install -> ...<repo>
+    if (-not (Test-Path (Join-Path $srcRoot "server\CardVault.csproj"))) {
+        throw "Can't find server\CardVault.csproj next to this script. Run it from inside the repo."
     }
     Step "Using source tree: $srcRoot"
 
@@ -59,11 +59,11 @@ try {
     }
 
     $srcVersion = "unknown"
-    $vm = [regex]::Match((Get-Content (Join-Path $srcRoot "server\PokemonVault.csproj") -Raw), '<Version>\s*([^<]+?)\s*</Version>')
+    $vm = [regex]::Match((Get-Content (Join-Path $srcRoot "server\CardVault.csproj") -Raw), '<Version>\s*([^<]+?)\s*</Version>')
     if ($vm.Success) { $srcVersion = $vm.Groups[1].Value }
 
     $installedVersion = $null
-    $exe = Join-Path $InstallDir "PokemonVault.exe"
+    $exe = Join-Path $InstallDir "CardVault.exe"
     if (Test-Path $exe) {
         $pv = (Get-Item $exe).VersionInfo.ProductVersion
         if ($pv) { $installedVersion = ($pv -split '\+')[0].Trim() }
@@ -77,7 +77,7 @@ try {
         Stop-Service -Name $Service -Force
         $svc.WaitForStatus("Stopped", (New-TimeSpan -Seconds 30))
     }
-    Get-Process -Name "PokemonVault" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+    Get-Process -Name "CardVault" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
     Start-Sleep -Milliseconds 500
 
     # --- build the frontend ---
@@ -116,14 +116,14 @@ try {
     # Writing it explicitly makes the service and a manual run agree.
     if (-not (Test-Path $DataDir)) { New-Item -ItemType Directory -Path $DataDir -Force | Out-Null }
 
-    $userData = Join-Path $env:LOCALAPPDATA "PokemonVault"
+    $userData = Join-Path $env:LOCALAPPDATA "CardVault"
     if ((Test-Path (Join-Path $userData "vault.db")) -and -not (Test-Path (Join-Path $DataDir "vault.db"))) {
         Step "Copying your existing collection from $userData"
         Copy-Item (Join-Path $userData "*") $DataDir -Recurse -Force
         Step "Copied - the original is left in place as a fallback"
     }
 
-    @{ PokemonVault = @{ DataDirectory = $DataDir } } | ConvertTo-Json |
+    @{ CardVault = @{ DataDirectory = $DataDir } } | ConvertTo-Json |
         Set-Content (Join-Path $InstallDir "appsettings.Production.json") -Encoding utf8
     Step "Data directory pinned to $DataDir"
 
@@ -140,14 +140,14 @@ try {
     icacls $DataDir /grant "*S-1-5-19:(OI)(CI)M" /T /Q | Out-Null
 
     # --- keep the launcher tools inside the install folder ---
-    Copy-Item (Join-Path $PSScriptRoot "*") $InstallDir -Force -Include "Launch-PokemonVault.bat", "vault.ico"
+    Copy-Item (Join-Path $PSScriptRoot "*") $InstallDir -Force -Include "Launch-CardVault.bat", "cardvault.ico"
 
     # --- service ---
     $svc = Get-Service -Name $Service -ErrorAction SilentlyContinue
     if (-not $svc) {
         Step "Service not found - creating it"
         sc.exe create $Service binPath= "$exe" start= auto obj= "NT AUTHORITY\LocalService" | Out-Null
-        sc.exe description $Service "Pokemon Vault - collection tracker" | Out-Null
+        sc.exe description $Service "CardVault - collection tracker" | Out-Null
     }
     elseif ($RepointService) {
         Step "Repointing service $Service at $exe"
@@ -184,7 +184,7 @@ try {
             } catch { Start-Sleep -Seconds 1 }
         }
 
-        Write-Host "Pokemon Vault $ver installed successfully." -ForegroundColor Green
+        Write-Host "CardVault $ver installed successfully." -ForegroundColor Green
         Write-Host "Running from: $runningFrom"
         Write-Host "Collection:   $DataDir"
         if ($ok) { Write-Host "Open:         http://localhost:5188" }
@@ -197,6 +197,6 @@ try {
 catch {
     Write-Host ""
     Write-Host "INSTALL FAILED: $($_.Exception.Message)" -ForegroundColor Red
-    Write-Host "Check the service with: sc.exe query PokemonVault"
+    Write-Host "Check the service with: sc.exe query CardVault"
     exit 1
 }

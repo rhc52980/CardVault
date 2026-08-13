@@ -1,6 +1,6 @@
-using PokemonVault.Data;
+using CardVault.Data;
 
-namespace PokemonVault.Services;
+namespace CardVault.Services;
 
 public sealed record ApiKeyStatus(bool Configured, string? Masked, string Source);
 
