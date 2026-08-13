@@ -203,6 +203,24 @@ export interface CustomItemRequest {
   notes?: string | null
 }
 
+export interface AuthStatus {
+  /** True once a password has been set. */
+  enabled: boolean
+  authenticated: boolean
+  /** False on plain HTTP — a password sent over that is readable in transit. */
+  isSecureConnection: boolean
+}
+
+export interface SessionInfo {
+  /** Only the first few characters — the full token is never sent to the client. */
+  tokenPrefix: string
+  createdAt: string
+  lastSeen: string
+  userAgent?: string | null
+  createdIp?: string | null
+  isCurrent: boolean
+}
+
 export interface ApiKeyStatus {
   configured: boolean
   /** Only the first and last few characters — the full key is never sent back. */

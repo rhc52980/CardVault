@@ -2,11 +2,12 @@ import { useCallback, useEffect, useState } from 'react'
 import { api } from './api'
 import { CollectionView } from './components/CollectionView'
 import { ImportView } from './components/ImportView'
+import { LoginScreen } from './components/LoginScreen'
 import { SearchView } from './components/SearchView'
 import { SetsView } from './components/SetsView'
 import { SettingsView } from './components/SettingsView'
 import { StatsBar } from './components/StatsBar'
-import type { CollectionItem, CollectionStats } from './types'
+import type { AuthStatus, CollectionItem, CollectionStats } from './types'
 
 type Tab = 'vault' | 'sets' | 'search' | 'import' | 'settings'
 
@@ -16,6 +17,17 @@ export default function App() {
   const [stats, setStats] = useState<CollectionStats | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [auth, setAuth] = useState<AuthStatus | null>(null)
+
+  const checkAuth = useCallback(async () => {
+    try {
+      setAuth(await api.authStatus())
+    } catch {
+      // If even the status call fails the server is unreachable; the collection
+      // fetch below will surface that more usefully.
+      setAuth({ enabled: false, authenticated: true, isSecureConnection: false })
+    }
+  }, [])
 
   const refresh = useCallback(async () => {
     try {
@@ -24,15 +36,31 @@ export default function App() {
       setStats(statistics)
       setError(null)
     } catch (e) {
+      // A session can expire while the tab is open; re-check so the login screen
+      // takes over rather than leaving a stuck error on screen.
+      void checkAuth()
       setError(e instanceof Error ? e.message : 'Could not reach the vault server')
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [checkAuth])
 
   useEffect(() => {
-    void refresh()
-  }, [refresh])
+    void checkAuth().then(refresh)
+  }, [checkAuth, refresh])
+
+  if (!auth) return <div className="aurora min-h-full" />
+
+  if (auth.enabled && !auth.authenticated) {
+    return (
+      <LoginScreen
+        status={auth}
+        onSignedIn={() => {
+          void checkAuth().then(refresh)
+        }}
+      />
+    )
+  }
 
   return (
     <div className="aurora relative min-h-full">
@@ -95,7 +123,13 @@ export default function App() {
           {tab === 'sets' && <SetsView onCollectionChanged={refresh} />}
           {tab === 'search' && <SearchView onCollectionChanged={refresh} />}
           {tab === 'import' && <ImportView onImported={refresh} />}
-          {tab === 'settings' && <SettingsView />}
+          {tab === 'settings' && (
+            <SettingsView
+              onAuthChanged={() => {
+                void checkAuth().then(refresh)
+              }}
+            />
+          )}
         </main>
 
         <footer className="mt-16 border-t border-edge pt-5 text-xs text-mute">

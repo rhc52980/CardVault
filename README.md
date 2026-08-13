@@ -15,6 +15,7 @@ Card artwork, set details, attack stats and market prices come from
   grade, quantity and what you paid.
 - **Values your collection** against TCGplayer market prices, including
   unrealised gain against purchase price.
+- **Optional password protection**, for when the network isn't fully trusted.
 - **Tracks where cards physically are**, so the app can tell you not just what you
   own but where to find it.
 - **Keeps a want list** with the price you'd pay, and flags cards when the market
@@ -305,11 +306,69 @@ cd client && npm run build && cd ../server && dotnet publish -c Release -r win-x
 Swap `win-x64` for `linux-x64` or `osx-arm64` as needed. The output folder is
 fully self-contained — no .NET runtime install required on the target machine.
 
+## Password protection
+
+Set a password under **Settings → Password**. Until you do, the app behaves as it
+always has — no login, which is fine on a network you trust. Once set, the API
+and card images require a session; the page shell stays public because the login
+screen has to load.
+
+- Passwords are stored as **PBKDF2-HMAC-SHA256** hashes, 600,000 iterations, with
+  a random per-password salt. The password itself is never stored.
+- **Sessions live server-side**, so signing out genuinely revokes access rather
+  than just discarding the browser's copy — which is what you want when the
+  reason you're signing out is a lost phone. Settings lists signed-in devices
+  with a **sign out everywhere else** button.
+- **Login is rate limited**: five attempts, then an exponential lockout per
+  client address. During a lockout even the correct password is refused.
+- Changing your password revokes every other session but keeps you signed in on
+  the device you changed it from.
+
+**There is no password reset.** Only the hash is stored. If you forget it, clear
+the row directly and the app reverts to unprotected:
+
+```bash
+sqlite3 "$LOCALAPPDATA/PokemonVault/vault.db" "DELETE FROM settings WHERE key='auth_password_hash'; DELETE FROM sessions;"
+```
+
+## Reaching it from outside your house
+
+**A password is necessary here but nowhere near sufficient.** Two things are
+worth being blunt about:
+
+1. **Over plain HTTP your password is sent readable.** On your own network that's
+   a minor risk; across the internet it means anyone on the path can take it.
+   Anything exposed externally must be HTTPS.
+2. **Port-forwarding puts a hand-rolled login in front of the entire internet.**
+   The auth here is carefully built, but it is one person's code on a machine in
+   your house, and internet-facing services get found by automated scanners
+   within hours.
+
+**The approach worth taking is not to expose the port at all:**
+
+- **Tailscale or WireGuard** — a private network between your devices. The app
+  stays bound to your LAN and unreachable from the public internet, and your
+  phone reaches it as if it were at home. This is the recommended option, and
+  Tailscale in particular takes about ten minutes.
+- **Cloudflare Tunnel** — outbound-only connection, HTTPS terminated for you, no
+  inbound ports and no public IP exposed.
+
+If you do decide to forward a port anyway, at minimum: put a real reverse proxy
+(Caddy or nginx) in front with a genuine TLS certificate, keep the password long
+and unique, and check the signed-in devices list periodically.
+
+To keep the server local-only while using a VPN, bind it to loopback or your LAN
+address:
+
+```bash
+ASPNETCORE_URLS=http://127.0.0.1:5188 dotnet run
+```
+
 ## Data and network notes
 
 - The server binds to `0.0.0.0:5188` so other devices on your network can reach
-  it. **There is no authentication** — it assumes a trusted home network. To keep
-  it local-only, set `ASPNETCORE_URLS=http://localhost:5188`.
+  it. Set a password (above) if that network isn't fully trusted, and read
+  **Reaching it from outside your house** before exposing it any further.
 - pokemontcg.io returns intermittent 500/502 errors even on valid requests. The
   client retries transient failures automatically, and upstream outages surface
   as a clear message rather than breaking the page — your saved collection is
@@ -321,12 +380,12 @@ fully self-contained — no .NET runtime install required on the target machine.
 server/            ASP.NET Core API + static host
   Data/DataPaths.cs  Resolves the per-user data directory, migrates old installs
   Data/Db.cs       SQLite schema: cards, collection, wants, sales,
-                   price_history, sets, settings, plus additive migrations for
-                   existing databases
+                   price_history, sets, sessions, settings, plus additive
+                   migrations for existing databases
   Services/        API client, card cache, collection, pricing, image cache,
                    daily price snapshots, sets + completion, custom items,
                    CSV parser and import jobs, want list, sales ledger, export,
-                   settings, backups
+                   authentication, settings, backups
   Program.cs       Minimal API endpoints
 client/            React frontend (builds into server/wwwroot)
   src/components/  Card grid, search, set browser, detail modal, price chart,

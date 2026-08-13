@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api'
-import type { AppSettings } from '../types'
+import type { AppSettings, AuthStatus, SessionInfo } from '../types'
 
 const field =
   'w-full rounded-lg border border-edge bg-abyss px-3 py-2 text-sm text-bright outline-none focus:border-arc focus:ring-1 focus:ring-arc'
@@ -16,7 +16,7 @@ function when(iso: string) {
   return Number.isNaN(d.getTime()) ? iso : d.toLocaleString()
 }
 
-export function SettingsView() {
+export function SettingsView({ onAuthChanged }: { onAuthChanged: () => void }) {
   const [settings, setSettings] = useState<AppSettings | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -36,10 +36,186 @@ export function SettingsView() {
 
   return (
     <div className="max-w-3xl space-y-5">
+      <SecurityCard onAuthChanged={onAuthChanged} />
       <ApiKeyCard settings={settings} onChanged={load} />
       <DataCard settings={settings} />
       <BackupsCard settings={settings} onChanged={load} />
     </div>
+  )
+}
+
+// ------------------------------------------------------------------ security
+
+function SecurityCard({ onAuthChanged }: { onAuthChanged: () => void }) {
+  const [status, setStatus] = useState<AuthStatus | null>(null)
+  const [sessions, setSessions] = useState<SessionInfo[]>([])
+  const [current, setCurrent] = useState('')
+  const [next, setNext] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [message, setMessage] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null)
+
+  const load = async () => {
+    const s = await api.authStatus()
+    setStatus(s)
+    setSessions(s.enabled ? await api.sessions().catch(() => []) : [])
+  }
+
+  useEffect(() => {
+    void load()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  async function run(action: () => Promise<unknown>, okText: string) {
+    setBusy(true)
+    setMessage(null)
+    try {
+      await action()
+      setCurrent('')
+      setNext('')
+      setMessage({ kind: 'ok', text: okText })
+      await load()
+      onAuthChanged()
+    } catch (e) {
+      setMessage({ kind: 'error', text: e instanceof Error ? e.message : 'That didn’t work' })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (!status) return <div className="skeleton h-40 rounded-xl" />
+
+  return (
+    <section className="panel rounded-xl p-4">
+      <h2 className="font-medium text-bright">Password</h2>
+
+      {!status.enabled ? (
+        <>
+          <p className="mt-1 text-sm text-mute">
+            The vault is currently open to anyone who can reach it on your network. Set a password
+            to require signing in.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <input
+              type="password"
+              autoComplete="new-password"
+              value={next}
+              onChange={(e) => setNext(e.target.value)}
+              placeholder="Choose a password (10+ characters)"
+              className={`${field} min-w-[240px] flex-1`}
+            />
+            <button
+              onClick={() => run(() => api.setupPassword(next), 'Password set — the vault now requires signing in.')}
+              disabled={busy || !next}
+              className="rounded-lg bg-arc px-4 py-2 text-sm font-medium text-white transition hover:brightness-110 disabled:opacity-40"
+            >
+              Set password
+            </button>
+          </div>
+        </>
+      ) : (
+        <>
+          <p className="mt-1 text-sm text-mint">● Signing in is required</p>
+
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            <input
+              type="password"
+              autoComplete="current-password"
+              value={current}
+              onChange={(e) => setCurrent(e.target.value)}
+              placeholder="Current password"
+              className={field}
+            />
+            <input
+              type="password"
+              autoComplete="new-password"
+              value={next}
+              onChange={(e) => setNext(e.target.value)}
+              placeholder="New password"
+              className={field}
+            />
+          </div>
+
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button
+              onClick={() => run(() => api.changePassword(current, next), 'Password changed. Other devices have been signed out.')}
+              disabled={busy || !current || !next}
+              className="rounded-lg bg-arc px-4 py-2 text-sm font-medium text-white transition hover:brightness-110 disabled:opacity-40"
+            >
+              Change password
+            </button>
+            <button
+              onClick={() => run(() => api.logout(), 'Signed out.')}
+              disabled={busy}
+              className="rounded-lg border border-edge px-4 py-2 text-sm text-mute transition hover:text-bright disabled:opacity-40"
+            >
+              Sign out
+            </button>
+            <button
+              onClick={() => run(() => api.disableAuth(current), 'Password removed — the vault is open again.')}
+              disabled={busy || !current}
+              title="Requires your current password"
+              className="rounded-lg px-4 py-2 text-sm text-mute transition hover:text-rose disabled:opacity-40"
+            >
+              Remove password
+            </button>
+          </div>
+
+          {sessions.length > 0 && (
+            <div className="mt-4">
+              <div className="mb-2 flex items-center justify-between">
+                <h3 className="text-[11px] tracking-wider text-mute uppercase">Signed-in devices</h3>
+                {sessions.length > 1 && (
+                  <button
+                    onClick={() => run(() => api.revokeOtherSessions(), 'Other devices signed out.')}
+                    disabled={busy}
+                    className="text-xs text-arc transition hover:underline disabled:opacity-40"
+                  >
+                    Sign out everywhere else
+                  </button>
+                )}
+              </div>
+              <div className="space-y-1">
+                {sessions.map((s) => (
+                  <div
+                    key={s.tokenPrefix}
+                    className="flex flex-wrap items-center gap-2 rounded-lg bg-white/[0.03] px-3 py-2 text-xs"
+                  >
+                    <span className={s.isCurrent ? 'text-mint' : 'text-mute'}>
+                      {s.isCurrent ? 'This device' : 'Other device'}
+                    </span>
+                    <span className="truncate text-mute">{s.createdIp}</span>
+                    <span className="min-w-0 flex-1 truncate text-mute">{s.userAgent}</span>
+                    <span className="text-mute">last seen {new Date(s.lastSeen).toLocaleString()}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {message && (
+        <p className={`mt-3 text-sm ${message.kind === 'ok' ? 'text-mint' : 'text-rose'}`}>{message.text}</p>
+      )}
+
+      <div className="mt-4 space-y-2 border-t border-edge pt-3 text-xs text-mute">
+        <p>
+          <span className="text-gold">Before you open this up to the internet:</span> a password is
+          necessary but not sufficient. Over plain HTTP it is sent readable, so anyone between you
+          and home can take it.
+        </p>
+        <p>
+          The safer option is not to expose the port at all — a{' '}
+          <strong className="text-bright">Tailscale or WireGuard VPN</strong>, or a{' '}
+          <strong className="text-bright">Cloudflare Tunnel</strong>, gives you access from anywhere
+          with HTTPS and nothing publicly reachable. Port-forwarding this straight to the internet
+          puts a hand-rolled login on a machine in your house in front of the whole world.
+        </p>
+        {!status.isSecureConnection && (
+          <p className="text-gold">This page is on plain HTTP right now.</p>
+        )}
+      </div>
+    </section>
   )
 }
 
@@ -157,7 +333,8 @@ function ApiKeyCard({ settings, onChanged }: { settings: AppSettings; onChanged:
         or rate-limited, re-check the key you pasted.
       </p>
       <p className="mt-2 text-xs text-mute">
-        This server has no login, so anyone who can reach it on your network can change this setting.
+        With no password set, anyone who can reach this server on your network can read your
+        collection and change this setting.
       </p>
     </section>
   )
