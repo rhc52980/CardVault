@@ -1,5 +1,8 @@
 import type {
   AddEntryRequest,
+  ApiKeyStatus,
+  AppSettings,
+  BackupInfo,
   CollectionItem,
   CollectionStats,
   CustomItemRequest,
@@ -90,6 +93,31 @@ export const api = {
 
   snapshot() {
     return fetch('/api/prices/snapshot', { method: 'POST' }).then(json<{ captured: number }>)
+  },
+
+  settings() {
+    return fetch('/api/settings').then(json<AppSettings>)
+  },
+
+  saveApiKey(apiKey: string) {
+    return fetch('/api/settings/api-key', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ apiKey }),
+    }).then(json<{ saved: boolean; reachable: boolean; apiKey?: ApiKeyStatus }>)
+  },
+
+  clearApiKey() {
+    return fetch('/api/settings/api-key', { method: 'DELETE' }).then(json<{ apiKey: ApiKeyStatus }>)
+  },
+
+  createBackup() {
+    return fetch('/api/backups', { method: 'POST' }).then(json<BackupInfo>)
+  },
+
+  async deleteBackup(name: string) {
+    const res = await fetch(`/api/backups/${encodeURIComponent(name)}`, { method: 'DELETE' })
+    if (!res.ok) throw new Error('Could not delete that backup')
   },
 
   sets() {

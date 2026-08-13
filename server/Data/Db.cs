@@ -11,13 +11,11 @@ public sealed class Db
 {
     private readonly string _connectionString;
 
-    public Db(string dataDirectory)
+    public Db(DataPaths paths)
     {
-        Directory.CreateDirectory(dataDirectory);
-        var path = Path.Combine(dataDirectory, "vault.db");
         _connectionString = new SqliteConnectionStringBuilder
         {
-            DataSource = path,
+            DataSource = paths.DatabaseFile,
             Mode = SqliteOpenMode.ReadWriteCreate,
             Cache = SqliteCacheMode.Shared,
         }.ToString();
@@ -99,6 +97,13 @@ public sealed class Db
                 logo         TEXT,
                 symbol       TEXT,
                 cached_at    TEXT NOT NULL
+            );
+
+            -- Small key/value store for the API key, last-run version and similar.
+            -- Living in the database means settings are backed up with everything else.
+            CREATE TABLE IF NOT EXISTS settings (
+                key   TEXT PRIMARY KEY,
+                value TEXT
             );
             """;
         cmd.ExecuteNonQuery();

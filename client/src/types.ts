@@ -110,6 +110,28 @@ export interface CustomItemRequest {
   notes?: string | null
 }
 
+export interface ApiKeyStatus {
+  configured: boolean
+  /** Only the first and last few characters — the full key is never sent back. */
+  masked?: string | null
+  source: string
+}
+
+export interface BackupInfo {
+  name: string
+  sizeBytes: number
+  createdUtc: string
+  reason: string
+}
+
+export interface AppSettings {
+  apiKey: ApiKeyStatus
+  dataDirectory: string
+  migratedFromLegacy: boolean
+  legacyDirectory: string
+  backups: BackupInfo[]
+}
+
 export interface SetSummary {
   id: string
   name: string

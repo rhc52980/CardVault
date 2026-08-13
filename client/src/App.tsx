@@ -4,10 +4,11 @@ import { CollectionView } from './components/CollectionView'
 import { ImportView } from './components/ImportView'
 import { SearchView } from './components/SearchView'
 import { SetsView } from './components/SetsView'
+import { SettingsView } from './components/SettingsView'
 import { StatsBar } from './components/StatsBar'
 import type { CollectionItem, CollectionStats } from './types'
 
-type Tab = 'vault' | 'sets' | 'search' | 'import'
+type Tab = 'vault' | 'sets' | 'search' | 'import' | 'settings'
 
 export default function App() {
   const [tab, setTab] = useState<Tab>('vault')
@@ -54,6 +55,7 @@ export default function App() {
                 ['sets', 'Sets'],
                 ['search', 'Add cards'],
                 ['import', 'Import CSV'],
+                ['settings', 'Settings'],
               ] as const
             ).map(([key, label]) => (
               <button
@@ -93,6 +95,7 @@ export default function App() {
           {tab === 'sets' && <SetsView onCollectionChanged={refresh} />}
           {tab === 'search' && <SearchView onCollectionChanged={refresh} />}
           {tab === 'import' && <ImportView onImported={refresh} />}
+          {tab === 'settings' && <SettingsView />}
         </main>
 
         <footer className="mt-16 border-t border-edge pt-5 text-xs text-mute">
