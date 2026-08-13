@@ -1,0 +1,24 @@
+# Secrets — never commit the pokemontcg.io API key
+appsettings.Local.json
+*.local.json
+.env
+.env.local
+
+# Local data (your collection database + cached card images)
+data/
+server/data/
+server/wwwroot/
+
+# .NET
+bin/
+obj/
+*.user
+
+# Node
+node_modules/
+client/dist/
+npm-debug.log*
+
+# OS
+Thumbs.db
+.DS_Store
