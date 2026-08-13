@@ -155,6 +155,26 @@ are deliberately excluded from two places where they'd be wrong:
 Deleting the last copy of a hand-entered item removes its synthetic card and its
 uploaded photo.
 
+## Searching
+
+The search box reads what you typed rather than assuming everything is a name,
+which matters when you're working through a physical stack:
+
+| You type | What it searches |
+| --- | --- |
+| `charizard` | name |
+| `4` | collector number |
+| `4/102` | number 4, and the **102** narrows it to sets with that printed total |
+| `charizard 4` | name and number together |
+| `rarity:"Rare Holo" types:Fire` | passed through as a raw API query |
+
+`4/102` is the useful one — type it exactly as printed on the card and you go
+from 20,000-odd cards to about two, because the denominator is the set's printed
+total and the API can filter on it directly.
+
+A name that ends in a digit (`Porygon2`) is still treated as a name, and
+`Charizard V` isn't split apart. The rules are pinned down in `tests/`.
+
 ## Set completion
 
 The **Sets** tab lists every set with a completion bar. It defaults to sets
@@ -396,6 +416,8 @@ server/            ASP.NET Core API + static host
                    CSV parser and import jobs, want list, sales ledger, export,
                    authentication, settings, backups
   Program.cs       Minimal API endpoints
+tests/             xunit tests (`dotnet test tests`) — currently the search
+                   query parser, where the name-vs-number rules live
 client/            React frontend (builds into server/wwwroot)
   src/components/  Card grid, search, set browser, detail modal, price chart,
                    stats, CSV import, manual entry, want list, sell + sold

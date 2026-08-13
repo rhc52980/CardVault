@@ -70,13 +70,16 @@ export function SearchView({ onCollectionChanged }: { onCollectionChanged: () =>
             ref={inputRef}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search any card — try “charizard”, or rarity:&quot;Rare Holo&quot; types:Fire"
+            placeholder="Card name, or a number straight off the card — “charizard”, “4/102”, “charizard 4”"
             className="w-full rounded-xl border border-edge bg-surface py-3.5 pr-4 pl-11 text-bright placeholder:text-mute/70 focus:border-arc focus:ring-1 focus:ring-arc focus:outline-none"
           />
         </div>
         <p className="mt-2 text-xs text-mute">
-          Free text searches by name. Include a colon to use the full query syntax, e.g.{' '}
-          <code className="text-arc">set.id:base1 rarity:&quot;Rare Holo&quot;</code>
+          Type <code className="text-arc">4/102</code> exactly as printed on the card and the
+          denominator picks the set for you. <code className="text-arc">4</code> searches by number,{' '}
+          <code className="text-arc">charizard 4</code> combines both, and anything with a colon is
+          passed through as a raw query — e.g.{' '}
+          <code className="text-arc">rarity:&quot;Rare Holo&quot; types:Fire</code>.
         </p>
       </div>
 
