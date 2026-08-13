@@ -17,6 +17,7 @@ public sealed class ImportService(
     CardCache cache,
     PokemonTcgClient api,
     CollectionService collection,
+    PriceSnapshotService snapshots,
     IHostApplicationLifetime lifetime,
     ILogger<ImportService> log)
 {
@@ -397,6 +398,9 @@ public sealed class ImportService(
                 PurchasePrice: row.PurchasePrice,
                 PurchaseDate: row.PurchaseDate,
                 Notes: row.Notes));
+
+            // Same as a single add: give each imported card a starting price point.
+            snapshots.RecordCurrentPrices(row.CardId);
             added++;
         }
 

@@ -84,6 +84,25 @@ export interface CollectionStats {
   cardsSold: number
 }
 
+export interface PricePoint {
+  date: string
+  market: number
+  low?: number | null
+  high?: number | null
+}
+
+export interface PriceSeries {
+  variant: string
+  points: PricePoint[]
+}
+
+export interface CardHistory {
+  cardId: string
+  series: PriceSeries[]
+  /** Printings you own, so the chart can lead with those. */
+  ownedVariants: string[]
+}
+
 export interface SellRequest {
   quantity: number
   salePrice: number

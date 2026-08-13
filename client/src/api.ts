@@ -3,6 +3,7 @@ import type {
   ApiKeyStatus,
   AppSettings,
   BackupInfo,
+  CardHistory,
   CollectionItem,
   CollectionStats,
   CustomItemRequest,
@@ -95,6 +96,10 @@ export const api = {
 
   snapshot() {
     return fetch('/api/prices/snapshot', { method: 'POST' }).then(json<{ captured: number }>)
+  },
+
+  cardHistory(cardId: string) {
+    return fetch(`/api/cards/${encodeURIComponent(cardId)}/history`).then(json<CardHistory>)
   },
 
   sales() {
