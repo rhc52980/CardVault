@@ -1,6 +1,6 @@
 using System.Text;
 
-namespace PokemonVault.Services;
+namespace CardVault.Services;
 
 /// <summary>
 /// Minimal RFC 4180 CSV reader. Collection exports come from all sorts of places

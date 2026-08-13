@@ -1,8 +1,8 @@
 using Microsoft.Data.Sqlite;
-using PokemonVault.Data;
-using PokemonVault.Models;
+using CardVault.Data;
+using CardVault.Models;
 
-namespace PokemonVault.Services;
+namespace CardVault.Services;
 
 /// <summary>
 /// The ledger of cards you've parted with.

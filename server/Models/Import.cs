@@ -1,4 +1,4 @@
-namespace PokemonVault.Models;
+namespace CardVault.Models;
 
 public enum ImportStatus
 {

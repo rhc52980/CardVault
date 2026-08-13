@@ -1,7 +1,7 @@
 using Microsoft.Data.Sqlite;
-using PokemonVault.Data;
+using CardVault.Data;
 
-namespace PokemonVault.Services;
+namespace CardVault.Services;
 
 /// <summary>
 /// Downloads card art once and serves it from disk afterwards. Card images never

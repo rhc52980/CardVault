@@ -1,5 +1,5 @@
 """
-Generates the app icons and the in-app logo from brand/Pokemon_Card_Vault.png.
+Generates the app icons and the in-app logo from brand/CardVault.png.
 
 That file is the source of truth. Everything under client/public/ that this
 writes is generated — edit the brand artwork and rerun, don't touch the outputs.
@@ -18,7 +18,7 @@ from pathlib import Path
 from PIL import Image
 
 ROOT = Path(__file__).resolve().parent.parent
-SOURCE = ROOT / "brand" / "Pokemon_Card_Vault.png"
+SOURCE = ROOT / "brand" / "CardVault.png"
 OUT = ROOT / "client" / "public"
 
 # The app's near-black ground. iOS ignores transparency and composites on white,
@@ -64,17 +64,13 @@ def flattened(img: Image.Image, size: int) -> Image.Image:
     return out
 
 
-# Fractions of the artwork holding the vault opening and the cards inside it.
-FOCAL_CROP = (0.28, 0.15, 0.72, 0.62)
+# The pokéball dial, for if the favicon ever needs to be legible at 16px more
+# than it needs to carry the wordmark. See the note in main().
+FOCAL_CROP = (0.50, 0.22, 0.92, 0.66)
 
 
 def focal(img: Image.Image) -> Image.Image:
-    """
-    The whole logo turns to mush below about 32px — the wordmark and the fanned
-    cards are far too fine. Cropping to the gold vault opening keeps a readable
-    silhouette and strong colour at favicon sizes. Multi-resolution icons exist
-    precisely so small entries can be a simplified image rather than a shrunken one.
-    """
+    """Crops to FOCAL_CROP and re-squares it, without distorting anything."""
     w = img.width
     left, top, right, bottom = FOCAL_CROP
     crop = img.crop((int(left * w), int(top * w), int(right * w), int(bottom * w)))
@@ -98,9 +94,17 @@ def main() -> None:
 
     flattened(art, 180).save(OUT / "apple-touch-icon.png", optimize=True)
 
-    # Browser tabs and OS shortcuts get the cropped vault, which stays readable
-    # where the full logo would not.
-    resized(focal(art), 256).save(OUT / "favicon.ico", sizes=[(16, 16), (32, 32), (48, 48)])
+    # Browser tabs and OS shortcuts.
+    #
+    # The whole logo is used rather than a crop: the CARDVAULT wordmark is still
+    # readable at 32 and 48px, which is what most displays render now. At 16px it
+    # is admittedly indistinct — an ICO holds one image scaled to each size, and
+    # Pillow silently drops extras passed via append_images, so there's no having
+    # both. If tab-strip recognition ever matters more than the wordmark, swap
+    # this for focal(art) to use the pokéball dial instead.
+    compact(resized(art, 256)).save(
+        OUT / "favicon.ico", sizes=[(16, 16), (32, 32), (48, 48)]
+    )
 
     # The logo used inside the app. 256 covers a 40px header mark even at 3x DPI,
     # and this one is on every page view so it gets the most attention to size.

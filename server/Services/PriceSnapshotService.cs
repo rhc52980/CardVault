@@ -1,8 +1,8 @@
 using System.Text.Json;
-using PokemonVault.Data;
-using PokemonVault.Models;
+using CardVault.Data;
+using CardVault.Models;
 
-namespace PokemonVault.Services;
+namespace CardVault.Services;
 
 /// <summary>
 /// Refreshes prices for every card you own and records one snapshot row per

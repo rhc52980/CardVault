@@ -1,7 +1,7 @@
 using System.Net;
 using System.Text.Json;
 
-namespace PokemonVault.Services;
+namespace CardVault.Services;
 
 /// <summary>
 /// Thin wrapper over the pokemontcg.io v2 API. Callers get raw JsonElements back —
