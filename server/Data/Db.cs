@@ -99,6 +99,33 @@ public sealed class Db
                 cached_at    TEXT NOT NULL
             );
 
+            -- Cards you've sold or otherwise parted with.
+            --
+            -- Card details are copied in rather than joined: a sold custom item's
+            -- synthetic card row gets cleaned up once nothing owns it, and the sale
+            -- record still needs to say what was sold. This is a ledger, so it has
+            -- to survive the thing it refers to.
+            CREATE TABLE IF NOT EXISTS sales (
+                id             INTEGER PRIMARY KEY AUTOINCREMENT,
+                card_id        TEXT NOT NULL,
+                card_name      TEXT NOT NULL,
+                set_name       TEXT,
+                number         TEXT,
+                image_small    TEXT,
+                quantity       INTEGER NOT NULL,
+                variant        TEXT,
+                condition      TEXT,
+                grade          TEXT,
+                purchase_price REAL,
+                sale_price     REAL NOT NULL,
+                fees           REAL,
+                sale_date      TEXT NOT NULL,
+                notes          TEXT,
+                recorded_at    TEXT NOT NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_sales_date ON sales(sale_date);
+
             -- Small key/value store for the API key, last-run version and similar.
             -- Living in the database means settings are backed up with everything else.
             CREATE TABLE IF NOT EXISTS settings (

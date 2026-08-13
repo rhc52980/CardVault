@@ -33,6 +33,8 @@ builder.Services.AddSingleton<PriceSnapshotService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<PriceSnapshotService>());
 builder.Services.AddSingleton<ImportService>();
 builder.Services.AddSingleton<SetsService>();
+builder.Services.AddSingleton<SalesService>();
+builder.Services.AddSingleton<ExportService>();
 builder.Services.AddHttpClient<CustomItemService>(c => c.Timeout = TimeSpan.FromSeconds(30));
 
 // Serialize enums as names so the UI reads "Ambiguous" rather than 1.
@@ -76,8 +78,30 @@ app.UseExceptionHandler(errorApp => errorApp.Run(async ctx =>
     });
 }));
 
+// index.html must never be cached, but the hashed asset files should be cached hard.
+// Vite fingerprints every bundle, so a stale index.html points at a filename that no
+// longer exists after an update — which shows up as a blank or half-broken app until
+// the browser is force-refreshed.
+var staticFileOptions = new StaticFileOptions
+{
+    OnPrepareResponse = ctx =>
+    {
+        var headers = ctx.Context.Response.Headers;
+        if (ctx.File.Name.Equals("index.html", StringComparison.OrdinalIgnoreCase))
+        {
+            headers.CacheControl = "no-cache, no-store, must-revalidate";
+            headers.Pragma = "no-cache";
+            headers.Expires = "0";
+        }
+        else
+        {
+            headers.CacheControl = "public, max-age=31536000, immutable";
+        }
+    },
+};
+
 app.UseDefaultFiles();
-app.UseStaticFiles();
+app.UseStaticFiles(staticFileOptions);
 
 // ---------------------------------------------------------------- card search
 
@@ -181,6 +205,31 @@ app.MapDelete("/api/collection/{id:long}", (long id, CollectionService collectio
     custom.CleanUpOrphans();
     return Results.NoContent();
 });
+
+// ------------------------------------------------------------- sales & export
+
+app.MapPost("/api/collection/{id:long}/sell", (long id, SellRequest req, SalesService sales) =>
+{
+    var (ok, error, saleId) = sales.Sell(id, req);
+    return ok ? Results.Ok(new { saleId }) : Results.BadRequest(new { error });
+});
+
+app.MapGet("/api/sales", (SalesService sales) => Results.Ok(sales.List()));
+
+app.MapDelete("/api/sales/{id:long}", (long id, SalesService sales)
+    => sales.Delete(id) ? Results.NoContent() : Results.NotFound());
+
+app.MapGet("/api/export/collection.csv", (ExportService export) => Results.File(
+    System.Text.Encoding.UTF8.GetBytes(export.CollectionCsv()), "text/csv",
+    $"pokemon-vault-collection-{DateTime.Now:yyyy-MM-dd}.csv"));
+
+app.MapGet("/api/export/sales.csv", (ExportService export) => Results.File(
+    System.Text.Encoding.UTF8.GetBytes(export.SalesCsv()), "text/csv",
+    $"pokemon-vault-sales-{DateTime.Now:yyyy-MM-dd}.csv"));
+
+app.MapGet("/api/export/vault.json", (ExportService export) => Results.File(
+    System.Text.Encoding.UTF8.GetBytes(export.EverythingJson()), "application/json",
+    $"pokemon-vault-{DateTime.Now:yyyy-MM-dd}.json"));
 
 // ------------------------------------------------------- settings & data safety
 
@@ -329,7 +378,9 @@ app.MapGet("/img/{cardId}/{size}", async (
     return Results.File(path, "image/png", enableRangeProcessing: true);
 });
 
-app.MapFallbackToFile("index.html");
+// Same options here, otherwise the SPA fallback would serve a cacheable index.html
+// and reintroduce the stale-bundle problem for any deep link.
+app.MapFallbackToFile("index.html", staticFileOptions);
 
 app.Run();
 

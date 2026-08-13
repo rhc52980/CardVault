@@ -3,6 +3,7 @@ import { api, cardImage, money } from '../api'
 import { prettyVariant, rarityClass, typeClass } from '../lib/cardStyles'
 import type { CollectionItem, FullCard } from '../types'
 import { Modal } from './Modal'
+import { SellDialog } from './SellDialog'
 
 export function CardDetail({
   cardId,
@@ -198,6 +199,7 @@ export function CardDetail({
 
 function OwnedRow({ entry, onChanged }: { entry: CollectionItem; onChanged: () => void }) {
   const [busy, setBusy] = useState(false)
+  const [selling, setSelling] = useState(false)
   const [editingValue, setEditingValue] = useState(false)
   const [draftValue, setDraftValue] = useState(String(entry.manualValue ?? ''))
 
@@ -329,13 +331,30 @@ function OwnedRow({ entry, onChanged }: { entry: CollectionItem; onChanged: () =
           +
         </button>
         <button
+          onClick={() => setSelling(true)}
+          disabled={busy}
+          className="ml-2 rounded-md border border-edge px-2 py-1 text-xs text-mute transition hover:border-mint/60 hover:text-mint disabled:opacity-30"
+          title="Records what you made and takes it out of the vault"
+        >
+          Sell
+        </button>
+        <button
           onClick={remove}
           disabled={busy}
-          className="ml-2 rounded-md px-2 py-1 text-xs text-mute transition hover:bg-rose/10 hover:text-rose disabled:opacity-30"
+          title="Deletes it outright, with no record kept — use Sell if it sold"
+          className="rounded-md px-2 py-1 text-xs text-mute transition hover:bg-rose/10 hover:text-rose disabled:opacity-30"
         >
           Remove
         </button>
       </div>
+
+      {selling && (
+        <SellDialog
+          entry={entry}
+          onClose={() => setSelling(false)}
+          onSold={onChanged}
+        />
+      )}
     </div>
   )
 }
