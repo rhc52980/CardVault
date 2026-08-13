@@ -11,12 +11,30 @@
 # bin, obj and appsettings.Local.json (your API key) are excluded by
 # construction rather than by a filter someone has to remember to update.
 
-param([string]$OutputDir = "$env:USERPROFILE\Downloads")
+param(
+    [string]$OutputDir = "$env:USERPROFILE\Downloads",
+    # Package anyway with uncommitted changes present. They still won't be
+    # included -- see the check below for why that's worth refusing over.
+    [switch]$AllowDirty
+)
 
 $ErrorActionPreference = "Stop"
 $root = Split-Path $PSScriptRoot -Parent
 
 function Step($msg) { Write-Host "==> $msg" -ForegroundColor Cyan }
+
+# Files come from `git archive HEAD`, so anything uncommitted is silently left
+# out. That has already shipped a package whose installer was a commit behind the
+# fix it was built to deliver, tested green here and then failed on the target
+# machine. Refuse rather than let that repeat.
+Push-Location $root
+try { $dirty = git status --porcelain } finally { Pop-Location }
+
+if ($dirty -and -not $AllowDirty) {
+    Write-Host "Uncommitted changes present - these would NOT be in the package:" -ForegroundColor Yellow
+    $dirty | ForEach-Object { "  $_" }
+    throw "Commit first, or re-run with -AllowDirty if you really mean to package HEAD as-is."
+}
 
 $version = "0.0.0"
 $vm = [regex]::Match((Get-Content (Join-Path $root "server\CardVault.csproj") -Raw), '<Version>\s*([^<]+?)\s*</Version>')
