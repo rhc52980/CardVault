@@ -15,6 +15,9 @@ Card artwork, set details, attack stats and market prices come from
   grade, quantity and what you paid.
 - **Values your collection** against TCGplayer market prices, including
   unrealised gain against purchase price.
+- **Tracks set completion.** Browse all 174 sets with a progress bar each, then
+  open one to see the full checklist as a binder page — cards you own in colour,
+  everything missing greyed out, with what it would cost to finish.
 - **Bulk imports a CSV** of an existing collection, matching each row against the
   catalogue and letting you review every match before anything is saved.
 - **Records its own price history.** The API only ever reports today's price, so
@@ -22,6 +25,29 @@ Card artwork, set details, attack stats and market prices come from
   chart fills in — that's data the API cannot give you retroactively.
 - **Caches everything locally.** Card metadata goes in SQLite and artwork on disk
   on first fetch, so the collection loads instantly and works offline.
+
+## Set completion
+
+The **Sets** tab lists every set with a completion bar. It defaults to sets
+you've started; switch to **All** to browse the full catalogue.
+
+Completion is counted two ways, because "complete" means different things:
+
+- **Printed set** (default) — the card numbers printed on the cards themselves
+- **Master set** — everything including secret rares, which is why a set can
+  show 84 printed but 120 total
+
+Opening a set shows its whole checklist in card-number order. Cards you own are
+in full colour with a tick; everything missing is greyed out, so gaps are
+obvious at a glance. A **show only what I'm missing** toggle turns it into a
+want list, and the header totals what finishing the set would cost at current
+market prices. Adding a card from here updates the progress bar immediately.
+
+Set metadata is mirrored into SQLite, so the browser still works when the API is
+down. Card details for a set are fetched once and then served from the local
+cache — which means prices for cards you *don't* own are from whenever the set
+was first opened. Prices for cards you do own stay current via the daily
+snapshot.
 
 ## CSV import
 
@@ -123,8 +149,10 @@ fully self-contained — no .NET runtime install required on the target machine.
 server/            ASP.NET Core API + static host
   Data/Db.cs       SQLite schema: cards, collection, price_history, sets
   Services/        API client, card cache, collection, pricing, image cache,
-                   daily price snapshots, CSV parser + import jobs
+                   daily price snapshots, sets + completion, CSV parser and
+                   import jobs
   Program.cs       Minimal API endpoints
 client/            React frontend (builds into server/wwwroot)
-  src/components/  Card grid, search, detail modal, stats, CSV import
+  src/components/  Card grid, search, set browser, detail modal, stats,
+                   CSV import
 ```

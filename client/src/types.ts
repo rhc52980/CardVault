@@ -87,6 +87,34 @@ export interface AddEntryRequest {
   notes?: string | null
 }
 
+export interface SetSummary {
+  id: string
+  name: string
+  series?: string | null
+  /** Number printed on the cards themselves — the "printed set". */
+  printedTotal: number
+  /** Includes secret rares — the "master set". */
+  total: number
+  releaseDate?: string | null
+  logo?: string | null
+  symbol?: string | null
+  ownedDistinct: number
+  ownedTotal: number
+}
+
+export interface SetCard {
+  cardId: string
+  name: string
+  number: string
+  numberSort: number
+  rarity?: string | null
+  supertype?: string | null
+  imageSmall?: string | null
+  marketPrice?: number | null
+  variants: string[]
+  ownedQuantity: number
+}
+
 export type ImportStatus = 'Matched' | 'Ambiguous' | 'NotFound' | 'LookupFailed' | 'Invalid'
 
 export interface CardCandidate {
