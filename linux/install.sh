@@ -30,9 +30,20 @@ if [[ ! -f "$SRC_ROOT/server/CardVault.csproj" ]]; then
 fi
 step "Using source tree: $SRC_ROOT"
 
-for tool in dotnet npm; do
-  command -v "$tool" >/dev/null 2>&1 || { echo "$tool not found on PATH." >&2; exit 1; }
-done
+# A release package ships the web UI already built, so the target machine needs
+# only the .NET SDK. Node is required just when building from a source checkout,
+# where server/wwwroot doesn't exist yet.
+PREBUILT_UI=0
+[[ -f "$SRC_ROOT/server/wwwroot/index.html" ]] && PREBUILT_UI=1
+
+command -v dotnet >/dev/null 2>&1 || {
+  echo "dotnet not found on PATH. Install the .NET SDK first." >&2; exit 1; }
+
+if [[ $PREBUILT_UI -eq 0 ]] && ! command -v npm >/dev/null 2>&1; then
+  echo "npm not found on PATH, and this source tree has no prebuilt web UI." >&2
+  echo "Either install Node.js, or use a release package — those ship the UI already built." >&2
+  exit 1
+fi
 
 # Stop before replacing the binary; systemd holds it open otherwise.
 if systemctl is-active --quiet "$SERVICE"; then
@@ -40,8 +51,12 @@ if systemctl is-active --quiet "$SERVICE"; then
   systemctl stop "$SERVICE"
 fi
 
-step "Building the web UI"
-(cd "$SRC_ROOT/client" && { [[ -d node_modules ]] || npm install --no-fund --no-audit; } && npm run build)
+if [[ $PREBUILT_UI -eq 1 ]]; then
+  step "Using the web UI already built into this package"
+else
+  step "Building the web UI"
+  (cd "$SRC_ROOT/client" && { [[ -d node_modules ]] || npm install --no-fund --no-audit; } && npm run build)
+fi
 
 step "Building the server"
 (cd "$SRC_ROOT/server" && dotnet publish -c Release -r linux-x64 -p:PublishSingleFile=true --self-contained true -o "$APP_DIR")
