@@ -62,4 +62,33 @@ public sealed record CollectionStats(
 
 public sealed record SetBreakdown(string? SetId, string? SetName, int Cards, double Value);
 
+/// <summary>
+/// A set plus how far through it you are. <see cref="PrintedTotal"/> is the number
+/// shown on the cards themselves; <see cref="Total"/> includes secret rares, so the
+/// two give "printed set" and "master set" completion respectively.
+/// </summary>
+public sealed record SetSummary(
+    string Id,
+    string Name,
+    string? Series,
+    int PrintedTotal,
+    int Total,
+    string? ReleaseDate,
+    string? Logo,
+    string? Symbol,
+    int OwnedDistinct,
+    int OwnedTotal);
+
+public sealed record SetCard(
+    string CardId,
+    string Name,
+    string Number,
+    int NumberSort,
+    string? Rarity,
+    string? Supertype,
+    string? ImageSmall,
+    double? MarketPrice,
+    IReadOnlyList<string> Variants,
+    int OwnedQuantity);
+
 public sealed record ValuePoint(string Date, double Value);
