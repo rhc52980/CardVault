@@ -52,10 +52,17 @@ try {
     }
     Step "Using source tree: $srcRoot"
 
-    foreach ($tool in @("dotnet", "npm")) {
-        if (-not (Get-Command $tool -ErrorAction SilentlyContinue)) {
-            throw "$tool not found on PATH. The .NET SDK and Node.js are both needed to build."
-        }
+    # A release package ships the web UI already built, so the target machine needs
+    # only the .NET SDK. Node is required just when building from a source
+    # checkout, where server\wwwroot doesn't exist yet.
+    $prebuiltUi = Test-Path (Join-Path $srcRoot "server\wwwroot\index.html")
+
+    if (-not (Get-Command "dotnet" -ErrorAction SilentlyContinue)) {
+        throw "dotnet not found on PATH. Install the .NET SDK from https://dotnet.microsoft.com/download"
+    }
+    if (-not $prebuiltUi -and -not (Get-Command "npm" -ErrorAction SilentlyContinue)) {
+        throw "npm not found on PATH, and this source tree has no prebuilt web UI. " +
+              "Either install Node.js, or use a release package -- those ship the UI already built."
     }
 
     $srcVersion = "unknown"
@@ -80,20 +87,25 @@ try {
     Get-Process -Name "CardVault" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
     Start-Sleep -Milliseconds 500
 
-    # --- build the frontend ---
+    # --- the frontend ---
     # The server has no UI without this: Vite writes the built app into
     # server\wwwroot, which publish then packages.
-    Step "Building the web UI"
-    Push-Location (Join-Path $srcRoot "client")
-    try {
-        if (-not (Test-Path "node_modules")) {
-            npm install --no-fund --no-audit
-            if ($LASTEXITCODE -ne 0) { throw "npm install failed with exit code $LASTEXITCODE" }
-        }
-        npm run build
-        if ($LASTEXITCODE -ne 0) { throw "npm run build failed with exit code $LASTEXITCODE" }
+    if ($prebuiltUi) {
+        Step "Using the web UI already built into this package"
     }
-    finally { Pop-Location }
+    else {
+        Step "Building the web UI"
+        Push-Location (Join-Path $srcRoot "client")
+        try {
+            if (-not (Test-Path "node_modules")) {
+                npm install --no-fund --no-audit
+                if ($LASTEXITCODE -ne 0) { throw "npm install failed with exit code $LASTEXITCODE" }
+            }
+            npm run build
+            if ($LASTEXITCODE -ne 0) { throw "npm run build failed with exit code $LASTEXITCODE" }
+        }
+        finally { Pop-Location }
+    }
 
     # --- publish the server into the install folder ---
     Step "Building the server (this can take a couple of minutes)"
