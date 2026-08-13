@@ -1,0 +1,277 @@
+import { useEffect, useState } from 'react'
+import { api, cardImage, money } from '../api'
+import { prettyVariant, rarityClass, typeClass } from '../lib/cardStyles'
+import type { CollectionItem, FullCard } from '../types'
+import { Modal } from './Modal'
+
+export function CardDetail({
+  cardId,
+  owned,
+  onClose,
+  onChanged,
+}: {
+  cardId: string
+  owned: CollectionItem[]
+  onClose: () => void
+  onChanged: () => void
+}) {
+  const [card, setCard] = useState<FullCard | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let active = true
+    api
+      .card(cardId)
+      .then((c) => active && setCard(c))
+      .catch((e) => active && setError(e instanceof Error ? e.message : 'Could not load card'))
+    return () => {
+      active = false
+    }
+  }, [cardId])
+
+  const prices = card?.tcgplayer?.prices ?? {}
+  const priceRows = Object.entries(prices)
+
+  return (
+    <Modal onClose={onClose} wide>
+      <div className="flex items-start justify-between gap-4 border-b border-edge p-4">
+        <div className="min-w-0">
+          <h2 className="truncate text-xl font-semibold">{card?.name ?? 'Loading…'}</h2>
+          {card && (
+            <p className="mt-1 text-sm text-mute">
+              {String((card.set as { name?: string })?.name ?? '')} · #{String(card.number ?? '')}
+              {card.rarity ? (
+                <>
+                  {' · '}
+                  <span className={rarityClass(card.rarity as string)}>{String(card.rarity)}</span>
+                </>
+              ) : null}
+            </p>
+          )}
+        </div>
+        <button
+          onClick={onClose}
+          aria-label="Close"
+          className="rounded-lg px-2 py-1 text-mute transition hover:bg-white/5 hover:text-bright"
+        >
+          ✕
+        </button>
+      </div>
+
+      {error && <p className="p-4 text-sm text-rose">{error}</p>}
+
+      <div className="grid gap-6 p-4 md:grid-cols-[minmax(0,260px)_1fr]">
+        <div>
+          <img
+            src={cardImage(cardId, 'large')}
+            alt={card?.name ?? cardId}
+            className="w-full rounded-xl shadow-2xl ring-1 ring-white/10"
+            onError={(e) => {
+              const large = (card?.images as { large?: string } | undefined)?.large
+              if (large) (e.currentTarget as HTMLImageElement).src = large
+            }}
+          />
+          {card?.artist ? <p className="mt-2 text-center text-xs text-mute">Illustrated by {String(card.artist)}</p> : null}
+        </div>
+
+        <div className="min-w-0 space-y-5">
+          {/* ---------------------------------------------------- market prices */}
+          <section>
+            <h3 className="mb-2 text-[11px] tracking-wider text-mute uppercase">
+              TCGplayer prices
+              {card?.tcgplayer?.updatedAt ? ` · updated ${card.tcgplayer.updatedAt}` : ''}
+            </h3>
+            {priceRows.length === 0 ? (
+              <p className="text-sm text-mute">No market data listed for this card.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-xs text-mute">
+                      <th className="py-1 pr-3 font-normal">Printing</th>
+                      <th className="py-1 pr-3 text-right font-normal">Low</th>
+                      <th className="py-1 pr-3 text-right font-normal">Market</th>
+                      <th className="py-1 text-right font-normal">High</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {priceRows.map(([variant, p]) => (
+                      <tr key={variant} className="border-t border-edge/60">
+                        <td className="py-1.5 pr-3">{prettyVariant(variant)}</td>
+                        <td className="py-1.5 pr-3 text-right tabular-nums text-mute">{money(p.low)}</td>
+                        <td className="py-1.5 pr-3 text-right font-medium tabular-nums text-gold">{money(p.market)}</td>
+                        <td className="py-1.5 text-right tabular-nums text-mute">{money(p.high)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {card?.tcgplayer?.url && (
+              <a
+                href={card.tcgplayer.url}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-2 inline-block text-xs text-arc hover:underline"
+              >
+                View on TCGplayer ↗
+              </a>
+            )}
+          </section>
+
+          {/* ------------------------------------------------------ card stats */}
+          {card && (
+            <section className="flex flex-wrap items-center gap-2">
+              {(card.types as string[] | undefined)?.map((t) => (
+                <span key={t} className={`rounded-full px-2.5 py-1 text-xs ring-1 ${typeClass(t)}`}>
+                  {t}
+                </span>
+              ))}
+              {card.hp ? (
+                <span className="rounded-full bg-white/5 px-2.5 py-1 text-xs text-mute ring-1 ring-white/10">
+                  {String(card.hp)} HP
+                </span>
+              ) : null}
+              {card.evolvesFrom ? (
+                <span className="rounded-full bg-white/5 px-2.5 py-1 text-xs text-mute ring-1 ring-white/10">
+                  Evolves from {card.evolvesFrom}
+                </span>
+              ) : null}
+            </section>
+          )}
+
+          {card?.abilities?.length ? (
+            <section>
+              <h3 className="mb-2 text-[11px] tracking-wider text-mute uppercase">Abilities</h3>
+              {card.abilities.map((a) => (
+                <div key={a.name} className="mb-2 rounded-lg bg-white/[0.03] p-3">
+                  <div className="text-sm font-medium text-bright">{a.name}</div>
+                  {a.text && <p className="mt-1 text-sm leading-relaxed text-mute">{a.text}</p>}
+                </div>
+              ))}
+            </section>
+          ) : null}
+
+          {card?.attacks?.length ? (
+            <section>
+              <h3 className="mb-2 text-[11px] tracking-wider text-mute uppercase">Attacks</h3>
+              {card.attacks.map((a) => (
+                <div key={a.name} className="mb-2 rounded-lg bg-white/[0.03] p-3">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <div className="text-sm font-medium text-bright">
+                      {a.name}
+                      {a.cost?.length ? <span className="ml-2 text-xs text-mute">{a.cost.join(' · ')}</span> : null}
+                    </div>
+                    {a.damage ? <div className="text-sm font-semibold text-gold tabular-nums">{a.damage}</div> : null}
+                  </div>
+                  {a.text && <p className="mt-1 text-sm leading-relaxed text-mute">{a.text}</p>}
+                </div>
+              ))}
+            </section>
+          ) : null}
+
+          {/* --------------------------------------------------- copies you own */}
+          <section>
+            <h3 className="mb-2 text-[11px] tracking-wider text-mute uppercase">
+              In your vault
+              {owned.length > 0 &&
+                (() => {
+                  const copies = owned.reduce((n, o) => n + o.quantity, 0)
+                  return ` · ${copies} ${copies === 1 ? 'copy' : 'copies'}`
+                })()}
+            </h3>
+            {owned.length === 0 ? (
+              <p className="text-sm text-mute">You don't own this one yet.</p>
+            ) : (
+              <div className="space-y-2">
+                {owned.map((o) => (
+                  <OwnedRow key={o.id} entry={o} onChanged={onChanged} />
+                ))}
+              </div>
+            )}
+          </section>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
+function OwnedRow({ entry, onChanged }: { entry: CollectionItem; onChanged: () => void }) {
+  const [busy, setBusy] = useState(false)
+
+  async function setQuantity(next: number) {
+    if (next < 1) return
+    setBusy(true)
+    try {
+      await api.update(entry.id, { quantity: next })
+      onChanged()
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function remove() {
+    setBusy(true)
+    try {
+      await api.remove(entry.id)
+      onChanged()
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const gain =
+    entry.purchasePrice != null && entry.marketPrice != null
+      ? (entry.marketPrice - entry.purchasePrice) * entry.quantity
+      : null
+
+  return (
+    <div className="flex flex-wrap items-center gap-3 rounded-lg bg-white/[0.03] px-3 py-2 text-sm">
+      <div className="min-w-0 flex-1">
+        <div className="truncate">
+          {prettyVariant(entry.variant)} · {entry.condition}
+          {entry.grade ? ` · ${entry.grade}` : ''}
+        </div>
+        <div className="mt-0.5 text-xs text-mute">
+          {money(entry.marketPrice)} each
+          {entry.purchasePrice != null && ` · paid ${money(entry.purchasePrice)}`}
+          {gain != null && (
+            <span className={gain >= 0 ? ' text-mint' : ' text-rose'}>
+              {' '}
+              ({gain >= 0 ? '+' : ''}
+              {money(gain)})
+            </span>
+          )}
+        </div>
+        {entry.notes && <div className="mt-0.5 truncate text-xs text-mute italic">{entry.notes}</div>}
+      </div>
+
+      <div className="flex items-center gap-1">
+        <button
+          onClick={() => setQuantity(entry.quantity - 1)}
+          disabled={busy || entry.quantity <= 1}
+          aria-label="Decrease quantity"
+          className="h-7 w-7 rounded-md bg-white/5 transition hover:bg-white/10 disabled:opacity-30"
+        >
+          −
+        </button>
+        <span className="w-8 text-center tabular-nums">{entry.quantity}</span>
+        <button
+          onClick={() => setQuantity(entry.quantity + 1)}
+          disabled={busy}
+          aria-label="Increase quantity"
+          className="h-7 w-7 rounded-md bg-white/5 transition hover:bg-white/10 disabled:opacity-30"
+        >
+          +
+        </button>
+        <button
+          onClick={remove}
+          disabled={busy}
+          className="ml-2 rounded-md px-2 py-1 text-xs text-mute transition hover:bg-rose/10 hover:text-rose disabled:opacity-30"
+        >
+          Remove
+        </button>
+      </div>
+    </div>
+  )
+}
