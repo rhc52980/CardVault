@@ -51,6 +51,10 @@ export interface CollectionItem {
   highPrice?: number | null
   lineValue?: number | null
   pricesUpdatedAt?: string | null
+  /** Your own valuation, which wins over market price when set. */
+  manualValue?: number | null
+  /** True for sealed product and anything else entered by hand. */
+  isCustom: boolean
 }
 
 export interface SetBreakdown {
@@ -82,6 +86,25 @@ export interface AddEntryRequest {
   variant?: string
   condition?: string
   grade?: string | null
+  purchasePrice?: number | null
+  purchaseDate?: string | null
+  notes?: string | null
+  manualValue?: number | null
+}
+
+export interface UpdateEntryRequest extends Partial<Omit<AddEntryRequest, 'cardId'>> {
+  /** Removes a manual value so the entry tracks market price again. */
+  clearManualValue?: boolean
+}
+
+export interface CustomItemRequest {
+  name: string
+  category?: string | null
+  imageUrl?: string | null
+  quantity?: number
+  condition?: string
+  grade?: string | null
+  value?: number | null
   purchasePrice?: number | null
   purchaseDate?: string | null
   notes?: string | null

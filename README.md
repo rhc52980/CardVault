@@ -15,6 +15,8 @@ Card artwork, set details, attack stats and market prices come from
   grade, quantity and what you paid.
 - **Values your collection** against TCGplayer market prices, including
   unrealised gain against purchase price.
+- **Handles sealed product and slabs** — things the catalogue can't price, entered
+  by hand with your own photo and valuation.
 - **Tracks set completion.** Browse all 174 sets with a progress bar each, then
   open one to see the full checklist as a binder page — cards you own in colour,
   everything missing greyed out, with what it would cost to finish.
@@ -25,6 +27,31 @@ Card artwork, set details, attack stats and market prices come from
   chart fills in — that's data the API cannot give you retroactively.
 - **Caches everything locally.** Card metadata goes in SQLite and artwork on disk
   on first fetch, so the collection loads instantly and works offline.
+
+## Sealed product and graded slabs
+
+These are two different problems, so they have two different answers.
+
+**A slab of a card the catalogue already has.** Add the card normally, set the
+grade, then use **Set your own value** on the entry. A PSA 10 bears no relation
+to the raw market price, so your figure drives valuation, gains and the
+collection total. The detail view still shows the ungraded market price
+underneath for reference. Clear the field to go back to tracking market.
+
+**Anything the catalogue doesn't list** — sealed boxes, ETBs, tins, Japanese
+promos, error cards. Use **+ By hand** in the vault toolbar. Pick a type (the
+form adapts: sealed product has no condition, a slab asks for the grade), give
+it a name and a value, and optionally upload a photo or paste an image URL.
+
+Hand-entered items are stored as synthetic cards, so they sort, filter and value
+like everything else, and they carry a gold **By hand** badge in the grid. They
+are deliberately excluded from two places where they'd be wrong:
+
+- **Daily price refresh** — there's nothing upstream to refresh, so your value stands
+- **Set completion** — a sealed box isn't a card in a set, so it can't inflate progress
+
+Deleting the last copy of a hand-entered item removes its synthetic card and its
+uploaded photo.
 
 ## Set completion
 
@@ -147,10 +174,11 @@ fully self-contained — no .NET runtime install required on the target machine.
 
 ```
 server/            ASP.NET Core API + static host
-  Data/Db.cs       SQLite schema: cards, collection, price_history, sets
+  Data/Db.cs       SQLite schema: cards, collection, price_history, sets,
+                   plus additive migrations for existing databases
   Services/        API client, card cache, collection, pricing, image cache,
-                   daily price snapshots, sets + completion, CSV parser and
-                   import jobs
+                   daily price snapshots, sets + completion, custom items,
+                   CSV parser and import jobs
   Program.cs       Minimal API endpoints
 client/            React frontend (builds into server/wwwroot)
   src/components/  Card grid, search, set browser, detail modal, stats,

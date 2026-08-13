@@ -12,7 +12,8 @@ public sealed class CollectionService(Db db)
                c.purchase_price, c.purchase_date, c.notes, c.added_at,
                k.name, k.set_id, k.set_name, k.set_series, k.number, k.rarity,
                k.supertype, k.types, k.hp, k.artist, k.release_date,
-               k.image_small, k.image_large, k.payload
+               k.image_small, k.image_large, k.payload,
+               c.manual_value, k.is_custom
         FROM collection c
         JOIN cards k ON k.id = c.card_id
         """;
@@ -35,9 +36,9 @@ public sealed class CollectionService(Db db)
         using var cmd = conn.CreateCommand();
         cmd.CommandText = """
             INSERT INTO collection (card_id, quantity, variant, condition, grade,
-                                    purchase_price, purchase_date, notes, added_at)
+                                    purchase_price, purchase_date, notes, manual_value, added_at)
             VALUES ($cardId, $quantity, $variant, $condition, $grade,
-                    $purchasePrice, $purchaseDate, $notes, $addedAt);
+                    $purchasePrice, $purchaseDate, $notes, $manualValue, $addedAt);
             SELECT last_insert_rowid();
             """;
         cmd.Parameters.AddWithValue("$cardId", req.CardId);
@@ -48,6 +49,7 @@ public sealed class CollectionService(Db db)
         cmd.Parameters.AddWithValue("$purchasePrice", (object?)req.PurchasePrice ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$purchaseDate", (object?)req.PurchaseDate ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$notes", (object?)req.Notes ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$manualValue", (object?)req.ManualValue ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$addedAt", DateTime.UtcNow.ToString("o"));
         return (long)(cmd.ExecuteScalar() ?? 0L);
     }
@@ -73,6 +75,11 @@ public sealed class CollectionService(Db db)
         Set("purchase_price", "purchasePrice", req.PurchasePrice);
         Set("purchase_date", "purchaseDate", req.PurchaseDate);
         Set("notes", "notes", req.Notes);
+
+        // Clearing needs an explicit flag: a null ManualValue means "leave alone",
+        // otherwise you could never go back to tracking market price.
+        if (req.ClearManualValue) sets.Add("manual_value = NULL");
+        else Set("manual_value", "manualValue", req.ManualValue);
 
         if (sets.Count == 0) return true;
 
@@ -104,9 +111,10 @@ public sealed class CollectionService(Db db)
             .OrderByDescending(s => s.Value)
             .ToList();
 
+        // Value the same way the grid does, so a slab's own valuation counts here too.
         var best = items
-            .Where(i => i.PurchasePrice is > 0 && i.MarketPrice is not null)
-            .Select(i => (i.Name, Gain: ((i.MarketPrice ?? 0) - (i.PurchasePrice ?? 0)) * i.Quantity))
+            .Where(i => i.PurchasePrice is > 0 && (i.ManualValue ?? i.MarketPrice) is not null)
+            .Select(i => (i.Name, Gain: ((i.ManualValue ?? i.MarketPrice ?? 0) - (i.PurchasePrice ?? 0)) * i.Quantity))
             .OrderByDescending(x => x.Gain)
             .FirstOrDefault();
 
@@ -153,9 +161,15 @@ public sealed class CollectionService(Db db)
         var variant = r.GetString(3);
         var quantity = r.GetInt32(2);
         var price = Pricing.ForVariant(card, variant);
+        var manualValue = r.IsDBNull(24) ? (double?)null : r.GetDouble(24);
+        var isCustom = !r.IsDBNull(25) && r.GetInt32(25) == 1;
         var types = r.IsDBNull(17)
             ? []
             : JsonSerializer.Deserialize<string[]>(r.GetString(17)) ?? [];
+
+        // Your own number wins. A slabbed PSA 10 and a sealed booster box both have
+        // a worth the catalogue's raw market price knows nothing about.
+        var unitValue = manualValue ?? price.Market;
 
         return new CollectionItem(
             Id: r.GetInt64(0),
@@ -184,7 +198,9 @@ public sealed class CollectionService(Db db)
             MarketPrice: price.Market,
             LowPrice: price.Low,
             HighPrice: price.High,
-            LineValue: price.Market is { } m ? Math.Round(m * quantity, 2) : null,
-            PricesUpdatedAt: Pricing.TcgUpdatedAt(card));
+            LineValue: unitValue is { } v ? Math.Round(v * quantity, 2) : null,
+            PricesUpdatedAt: Pricing.TcgUpdatedAt(card),
+            ManualValue: manualValue,
+            IsCustom: isCustom);
     }
 }

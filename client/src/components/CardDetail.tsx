@@ -198,6 +198,20 @@ export function CardDetail({
 
 function OwnedRow({ entry, onChanged }: { entry: CollectionItem; onChanged: () => void }) {
   const [busy, setBusy] = useState(false)
+  const [editingValue, setEditingValue] = useState(false)
+  const [draftValue, setDraftValue] = useState(String(entry.manualValue ?? ''))
+
+  async function saveValue() {
+    setBusy(true)
+    try {
+      const trimmed = draftValue.trim()
+      await api.update(entry.id, trimmed === '' ? { clearManualValue: true } : { manualValue: Number(trimmed) })
+      setEditingValue(false)
+      onChanged()
+    } finally {
+      setBusy(false)
+    }
+  }
 
   async function setQuantity(next: number) {
     if (next < 1) return
@@ -220,9 +234,11 @@ function OwnedRow({ entry, onChanged }: { entry: CollectionItem; onChanged: () =
     }
   }
 
+  // A graded slab is worth what you say it is, not what a raw copy trades for.
+  const effectiveValue = entry.manualValue ?? entry.marketPrice
   const gain =
-    entry.purchasePrice != null && entry.marketPrice != null
-      ? (entry.marketPrice - entry.purchasePrice) * entry.quantity
+    entry.purchasePrice != null && effectiveValue != null
+      ? (effectiveValue - entry.purchasePrice) * entry.quantity
       : null
 
   return (
@@ -233,7 +249,8 @@ function OwnedRow({ entry, onChanged }: { entry: CollectionItem; onChanged: () =
           {entry.grade ? ` · ${entry.grade}` : ''}
         </div>
         <div className="mt-0.5 text-xs text-mute">
-          {money(entry.marketPrice)} each
+          {money(effectiveValue)} each
+          {entry.manualValue != null && <span className="text-gold"> (your value)</span>}
           {entry.purchasePrice != null && ` · paid ${money(entry.purchasePrice)}`}
           {gain != null && (
             <span className={gain >= 0 ? ' text-mint' : ' text-rose'}>
@@ -243,6 +260,53 @@ function OwnedRow({ entry, onChanged }: { entry: CollectionItem; onChanged: () =
             </span>
           )}
         </div>
+
+        {entry.manualValue != null && entry.marketPrice != null && (
+          <div className="mt-0.5 text-xs text-mute">Ungraded market price is {money(entry.marketPrice)}</div>
+        )}
+
+        {editingValue ? (
+          <div className="mt-2 flex items-center gap-2">
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              autoFocus
+              value={draftValue}
+              onChange={(e) => setDraftValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') void saveValue()
+                if (e.key === 'Escape') setEditingValue(false)
+              }}
+              placeholder="Leave blank to track market"
+              className="w-48 rounded-md border border-edge bg-abyss px-2 py-1 text-xs text-bright outline-none focus:border-arc"
+            />
+            <button
+              onClick={saveValue}
+              disabled={busy}
+              className="rounded-md bg-arc px-2.5 py-1 text-xs text-white transition hover:brightness-110 disabled:opacity-40"
+            >
+              Save
+            </button>
+            <button
+              onClick={() => setEditingValue(false)}
+              className="rounded-md px-2 py-1 text-xs text-mute transition hover:text-bright"
+            >
+              Cancel
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => {
+              setDraftValue(String(entry.manualValue ?? ''))
+              setEditingValue(true)
+            }}
+            className="mt-1 text-xs text-arc transition hover:underline"
+          >
+            {entry.manualValue != null ? 'Edit your value' : 'Set your own value'}
+          </button>
+        )}
+
         {entry.notes && <div className="mt-0.5 truncate text-xs text-mute italic">{entry.notes}</div>}
       </div>
 

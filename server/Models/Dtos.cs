@@ -8,13 +8,33 @@ public sealed record AddEntryRequest(
     string? Grade = null,
     double? PurchasePrice = null,
     string? PurchaseDate = null,
-    string? Notes = null);
+    string? Notes = null,
+    double? ManualValue = null);
 
 public sealed record UpdateEntryRequest(
     int? Quantity = null,
     string? Variant = null,
     string? Condition = null,
     string? Grade = null,
+    double? PurchasePrice = null,
+    string? PurchaseDate = null,
+    string? Notes = null,
+    double? ManualValue = null,
+    /// <summary>Set true to clear a manual value and fall back to market price.</summary>
+    bool ClearManualValue = false);
+
+/// <summary>
+/// Something the catalogue doesn't have — a booster box, an ETB, a Japanese
+/// promo. Stored as a synthetic card so the rest of the app treats it normally.
+/// </summary>
+public sealed record CustomItemRequest(
+    string Name,
+    string? Category = null,
+    string? ImageUrl = null,
+    int Quantity = 1,
+    string Condition = "NM",
+    string? Grade = null,
+    double? Value = null,
     double? PurchasePrice = null,
     string? PurchaseDate = null,
     string? Notes = null);
@@ -48,7 +68,11 @@ public sealed record CollectionItem(
     double? LowPrice,
     double? HighPrice,
     double? LineValue,
-    string? PricesUpdatedAt);
+    string? PricesUpdatedAt,
+    /// <summary>Your own valuation, which wins over market price when set.</summary>
+    double? ManualValue,
+    /// <summary>True for items you entered by hand rather than from the catalogue.</summary>
+    bool IsCustom);
 
 public sealed record CollectionStats(
     int DistinctCards,

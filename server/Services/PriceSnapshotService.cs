@@ -91,7 +91,13 @@ public sealed class PriceSnapshotService(
     {
         using var conn = db.Open();
         using var cmd = conn.CreateCommand();
-        cmd.CommandText = "SELECT DISTINCT card_id FROM collection";
+        // Custom items have no catalogue entry to refresh — their value is yours to set.
+        cmd.CommandText = """
+            SELECT DISTINCT c.card_id
+            FROM collection c
+            JOIN cards k ON k.id = c.card_id
+            WHERE COALESCE(k.is_custom, 0) = 0
+            """;
         var ids = new List<string>();
         using var r = cmd.ExecuteReader();
         while (r.Read()) ids.Add(r.GetString(0));
