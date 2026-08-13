@@ -1,7 +1,8 @@
 import { useRef, useState, type ReactNode } from 'react'
 
 interface Props {
-  image: string
+  /** Null when the item has no artwork at all — renders the name placeholder instead. */
+  image: string | null
   fallbackImage?: string | null
   name: string
   subtitle?: ReactNode
@@ -20,6 +21,7 @@ export function CardTile({ image, fallbackImage, name, subtitle, badge, corner, 
   const ref = useRef<HTMLDivElement>(null)
   const [loaded, setLoaded] = useState(false)
   const [failed, setFailed] = useState(false)
+  const [broken, setBroken] = useState(false)
 
   function handleMove(e: React.MouseEvent<HTMLDivElement>) {
     const el = ref.current
@@ -41,6 +43,9 @@ export function CardTile({ image, fallbackImage, name, subtitle, badge, corner, 
   // The API image URL is the fallback if our own cache can't produce the file.
   const src = failed && fallbackImage ? fallbackImage : image
 
+  // No artwork to request — don't fire a request that's guaranteed to 404.
+  const showPlaceholder = broken || !src
+
   return (
     <div className="group">
       <div
@@ -58,19 +63,28 @@ export function CardTile({ image, fallbackImage, name, subtitle, badge, corner, 
         }}
         className="card-tile card-holo relative aspect-[245/342] cursor-pointer overflow-hidden rounded-xl bg-abyss ring-1 ring-white/5 focus:ring-2 focus:ring-arc focus:outline-none"
       >
-        {!loaded && <div className="skeleton absolute inset-0 rounded-xl" />}
-        <img
-          src={src}
-          alt={name}
-          loading="lazy"
-          decoding="async"
-          onLoad={() => setLoaded(true)}
-          onError={() => {
-            if (!failed && fallbackImage) setFailed(true)
-            else setLoaded(true)
-          }}
-          className={`h-full w-full object-cover transition-opacity duration-300 ${loaded ? 'opacity-100' : 'opacity-0'}`}
-        />
+        {!loaded && !showPlaceholder && <div className="skeleton absolute inset-0 rounded-xl" />}
+
+        {showPlaceholder ? (
+          // Hand-entered items often have no photo. Show the name rather than a
+          // browser's broken-image glyph.
+          <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-raised to-abyss p-3 text-center">
+            <span className="line-clamp-4 text-xs font-medium text-mute">{name}</span>
+          </div>
+        ) : (
+          <img
+            src={src}
+            alt={name}
+            loading="lazy"
+            decoding="async"
+            onLoad={() => setLoaded(true)}
+            onError={() => {
+              if (!failed && fallbackImage) setFailed(true)
+              else setBroken(true)
+            }}
+            className={`h-full w-full object-cover transition-opacity duration-300 ${loaded ? 'opacity-100' : 'opacity-0'}`}
+          />
+        )}
 
         {badge && <div className="absolute top-2 left-2 z-10">{badge}</div>}
         {corner && <div className="absolute top-2 right-2 z-10">{corner}</div>}

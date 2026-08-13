@@ -4,6 +4,7 @@ import { rarityClass } from '../lib/cardStyles'
 import type { CollectionItem } from '../types'
 import { CardDetail } from './CardDetail'
 import { CardTile } from './CardTile'
+import { ManualEntryDialog } from './ManualEntryDialog'
 
 type SortKey = 'value' | 'name' | 'set' | 'added' | 'rarity'
 
@@ -33,6 +34,7 @@ export function CollectionView({
   const [setFilter_, setSetFilter] = useState('')
   const [sort, setSort] = useState<SortKey>('value')
   const [detailCardId, setDetailCardId] = useState<string | null>(null)
+  const [manualOpen, setManualOpen] = useState(false)
 
   const sets = useMemo(() => {
     const seen = new Map<string, string>()
@@ -96,12 +98,22 @@ export function CollectionView({
           Search the Pokémon TCG catalogue to add your first card. Artwork, set details and market
           prices are pulled in automatically.
         </p>
-        <button
-          onClick={onGoToSearch}
-          className="mt-6 rounded-lg bg-arc px-5 py-2.5 text-sm font-medium text-white transition hover:brightness-110"
-        >
-          Find your first card
-        </button>
+        <div className="mt-6 flex flex-wrap justify-center gap-3">
+          <button
+            onClick={onGoToSearch}
+            className="rounded-lg bg-arc px-5 py-2.5 text-sm font-medium text-white transition hover:brightness-110"
+          >
+            Find your first card
+          </button>
+          <button
+            onClick={() => setManualOpen(true)}
+            className="rounded-lg border border-edge px-5 py-2.5 text-sm text-mute transition hover:text-bright"
+          >
+            Add sealed or graded by hand
+          </button>
+        </div>
+
+        {manualOpen && <ManualEntryDialog onClose={() => setManualOpen(false)} onAdded={onChanged} />}
       </div>
     )
   }
@@ -132,6 +144,14 @@ export function CollectionView({
             </option>
           ))}
         </select>
+
+        <button
+          onClick={() => setManualOpen(true)}
+          className="rounded-lg border border-edge px-3 py-2 text-sm text-mute transition hover:border-arc/60 hover:text-bright"
+          title="Add sealed product, a slab, or anything else the catalogue doesn't list"
+        >
+          + By hand
+        </button>
       </div>
 
       <p className="text-sm text-mute">
@@ -143,21 +163,35 @@ export function CollectionView({
         {visible.map((item) => (
           <CardTile
             key={item.id}
-            image={cardImage(item.cardId, 'small')}
+            image={item.imageSmall ? cardImage(item.cardId, 'small') : null}
             fallbackImage={item.imageSmall}
             name={item.name}
             subtitle={
-              <>
-                {item.setName} · #{item.number}
-                {item.rarity && <span className={`ml-1 ${rarityClass(item.rarity)}`}>· {item.rarity}</span>}
-              </>
+              item.isCustom ? (
+                <>
+                  {item.setName}
+                  {item.grade && <span className="ml-1 text-gold">· {item.grade}</span>}
+                </>
+              ) : (
+                <>
+                  {item.setName} · #{item.number}
+                  {item.rarity && <span className={`ml-1 ${rarityClass(item.rarity)}`}>· {item.rarity}</span>}
+                </>
+              )
             }
             badge={
-              item.quantity > 1 ? (
-                <span className="rounded-full bg-black/75 px-2 py-0.5 text-[11px] font-semibold text-bright backdrop-blur">
-                  ×{item.quantity}
-                </span>
-              ) : null
+              <div className="flex flex-col items-start gap-1">
+                {item.quantity > 1 && (
+                  <span className="rounded-full bg-black/75 px-2 py-0.5 text-[11px] font-semibold text-bright backdrop-blur">
+                    ×{item.quantity}
+                  </span>
+                )}
+                {item.isCustom && (
+                  <span className="rounded-full bg-gold/90 px-2 py-0.5 text-[11px] font-semibold text-black shadow">
+                    By hand
+                  </span>
+                )}
+              </div>
             }
             corner={
               item.lineValue != null ? (
@@ -172,16 +206,19 @@ export function CollectionView({
                   {item.condition}
                   {item.grade ? ` · ${item.grade}` : ''}
                 </div>
-                {item.purchasePrice != null && item.marketPrice != null && (
-                  <div
-                    className={
-                      item.marketPrice >= item.purchasePrice ? 'text-mint' : 'text-rose'
-                    }
-                  >
-                    {item.marketPrice >= item.purchasePrice ? '+' : ''}
-                    {money((item.marketPrice - item.purchasePrice) * item.quantity)} vs paid
-                  </div>
-                )}
+                {(() => {
+                  // Your own valuation wins, so a slab compares against what it's
+                  // really worth rather than the raw card's market price.
+                  const worth = item.manualValue ?? item.marketPrice
+                  if (item.purchasePrice == null || worth == null) return null
+                  const up = worth >= item.purchasePrice
+                  return (
+                    <div className={up ? 'text-mint' : 'text-rose'}>
+                      {up ? '+' : ''}
+                      {money((worth - item.purchasePrice) * item.quantity)} vs paid
+                    </div>
+                  )
+                })()}
               </div>
             }
             onClick={() => setDetailCardId(item.cardId)}
@@ -197,6 +234,8 @@ export function CollectionView({
           onChanged={onChanged}
         />
       )}
+
+      {manualOpen && <ManualEntryDialog onClose={() => setManualOpen(false)} onAdded={onChanged} />}
     </div>
   )
 }

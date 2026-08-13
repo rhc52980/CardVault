@@ -33,6 +33,7 @@ builder.Services.AddSingleton<PriceSnapshotService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<PriceSnapshotService>());
 builder.Services.AddSingleton<ImportService>();
 builder.Services.AddSingleton<SetsService>();
+builder.Services.AddHttpClient<CustomItemService>(c => c.Timeout = TimeSpan.FromSeconds(30));
 
 // Serialize enums as names so the UI reads "Ambiguous" rather than 1.
 builder.Services.ConfigureHttpJsonOptions(o =>
@@ -116,6 +117,10 @@ app.MapGet("/api/cards/{id}", async (string id, PokemonTcgClient api, CardCache 
     var payload = cache.GetPayload(id);
     if (payload is null)
     {
+        // A custom item only ever exists locally, so there's nothing upstream to ask
+        // for — going to the API would just burn four retries on a guaranteed miss.
+        if (CustomItemService.IsCustomId(id)) return Results.NotFound();
+
         var fetched = await api.GetCardAsync(id, ct);
         if (fetched is null) return Results.NotFound();
         cache.Upsert(fetched.Value);
@@ -166,8 +171,52 @@ app.MapPost("/api/collection", async (
 app.MapPatch("/api/collection/{id:long}", (long id, UpdateEntryRequest req, CollectionService collection)
     => collection.Update(id, req) ? Results.NoContent() : Results.NotFound());
 
-app.MapDelete("/api/collection/{id:long}", (long id, CollectionService collection)
-    => collection.Delete(id) ? Results.NoContent() : Results.NotFound());
+app.MapDelete("/api/collection/{id:long}", (long id, CollectionService collection, CustomItemService custom) =>
+{
+    if (!collection.Delete(id)) return Results.NotFound();
+    custom.CleanUpOrphans();
+    return Results.NoContent();
+});
+
+// ------------------------------------------- manual entry: sealed, slabs, oddities
+
+app.MapPost("/api/custom", async (HttpRequest request, CustomItemService custom, CancellationToken ct) =>
+{
+    CustomItemRequest? req;
+    Stream? image = null;
+
+    // Accepts a multipart form when an image file is attached, plain JSON otherwise.
+    if (request.HasFormContentType)
+    {
+        var form = await request.ReadFormAsync(ct);
+        string? F(string k) => form.TryGetValue(k, out var v) && !string.IsNullOrWhiteSpace(v) ? v.ToString() : null;
+        double? D(string k) => double.TryParse(F(k), out var d) ? d : null;
+
+        req = new CustomItemRequest(
+            Name: F("name") ?? "",
+            Category: F("category"),
+            ImageUrl: F("imageUrl"),
+            Quantity: int.TryParse(F("quantity"), out var q) ? q : 1,
+            Condition: F("condition") ?? "NM",
+            Grade: F("grade"),
+            Value: D("value"),
+            PurchasePrice: D("purchasePrice"),
+            PurchaseDate: F("purchaseDate"),
+            Notes: F("notes"));
+
+        image = form.Files.GetFile("image")?.OpenReadStream();
+    }
+    else
+    {
+        req = await request.ReadFromJsonAsync<CustomItemRequest>(ct);
+    }
+
+    if (req is null || string.IsNullOrWhiteSpace(req.Name))
+        return Results.BadRequest(new { error = "A name is required." });
+
+    var (cardId, entryId) = await custom.CreateAsync(req, image, ct);
+    return Results.Created($"/api/collection/{entryId}", new { cardId, entryId });
+});
 
 app.MapPost("/api/prices/snapshot", async (PriceSnapshotService snapshots, CancellationToken ct) =>
 {
