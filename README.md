@@ -15,6 +15,9 @@ Card artwork, set details, attack stats and market prices come from
   grade, quantity and what you paid.
 - **Values your collection** against TCGplayer market prices, including
   unrealised gain against purchase price.
+- **Keeps a sold ledger** so profit you actually banked isn't lost when a card
+  leaves the collection.
+- **Exports everything** as CSV or JSON, so your data is never trapped in here.
 - **Handles sealed product and slabs** — things the catalogue can't price, entered
   by hand with your own photo and valuation.
 - **Tracks set completion.** Browse all 174 sets with a progress bar each, then
@@ -27,6 +30,48 @@ Card artwork, set details, attack stats and market prices come from
   chart fills in — that's data the API cannot give you retroactively.
 - **Caches everything locally.** Card metadata goes in SQLite and artwork on disk
   on first fetch, so the collection loads instantly and works offline.
+
+## Selling, and the sold ledger
+
+When a card sells, use **Sell** on it rather than Remove. Remove deletes it
+outright with no record; Sell records what you got and takes it out of the vault.
+
+Enter quantity, sale price each, fees and a date, and the dialog shows the
+proceeds and profit before you commit. Selling part of a stack leaves the
+remainder in place.
+
+Sold cards live under **My vault → Sold**, with totals for proceeds, realised
+profit and cards sold. Once you've sold anything, the stats bar swaps its "best
+performer" tile for **realised profit** — money actually banked rather than
+paper gains.
+
+Sales where no purchase price was ever recorded count towards proceeds but not
+profit, and say so. Treating an unknown cost as zero would report the full sale
+price as profit and quietly overstate how well you'd done.
+
+The ledger stores its own copy of the card's details rather than pointing at the
+card record, so a sale stays readable even after the thing it refers to is gone —
+which matters for hand-entered items, whose synthetic card is cleaned up once
+nothing owns it.
+
+Deleting a sale record removes it from history only; it does not put the card
+back in your vault.
+
+## Export
+
+Everything can leave the app, from the buttons above the collection:
+
+- **Collection CSV** — spreadsheet-friendly, and the column headers are exactly
+  the ones the importer accepts, so an export re-imports cleanly. Computed
+  columns (market price, line value, rarity) come along for reading and are
+  ignored on the way back in.
+- **Sales CSV** — the sold ledger with proceeds and realised profit per sale.
+- **JSON** — the complete picture: collection, sales, hand-entered items and
+  totals in one file.
+
+Hand-entered items carry ids beginning `custom-` that only mean anything in the
+vault that created them, so they won't match if a CSV is imported into a fresh
+database. The JSON export keeps their full details regardless.
 
 ## Sealed product and graded slabs
 
@@ -218,11 +263,13 @@ fully self-contained — no .NET runtime install required on the target machine.
 ```
 server/            ASP.NET Core API + static host
   Data/DataPaths.cs  Resolves the per-user data directory, migrates old installs
-  Data/Db.cs       SQLite schema: cards, collection, price_history, sets,
-                   settings, plus additive migrations for existing databases
+  Data/Db.cs       SQLite schema: cards, collection, sales, price_history,
+                   sets, settings, plus additive migrations for existing
+                   databases
   Services/        API client, card cache, collection, pricing, image cache,
                    daily price snapshots, sets + completion, custom items,
-                   CSV parser and import jobs, settings, backups
+                   CSV parser and import jobs, sales ledger, export,
+                   settings, backups
   Program.cs       Minimal API endpoints
 client/            React frontend (builds into server/wwwroot)
   src/components/  Card grid, search, set browser, detail modal, stats,

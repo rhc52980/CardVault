@@ -82,7 +82,11 @@ public sealed record CollectionStats(
     double? BiggestGainAmount,
     string? BiggestGainCardName,
     IReadOnlyList<SetBreakdown> BySet,
-    IReadOnlyList<ValuePoint> ValueHistory);
+    IReadOnlyList<ValuePoint> ValueHistory,
+    /// <summary>Money actually made on cards you've sold, after fees.</summary>
+    double RealisedGain,
+    double SaleProceeds,
+    int CardsSold);
 
 public sealed record SetBreakdown(string? SetId, string? SetName, int Cards, double Value);
 
@@ -118,3 +122,32 @@ public sealed record SetCard(
 public sealed record ValuePoint(string Date, double Value);
 
 public sealed record ApiKeyRequest(string? ApiKey);
+
+/// <summary>Selling some or all of a collection entry.</summary>
+public sealed record SellRequest(
+    int Quantity,
+    double SalePrice,
+    string? SaleDate = null,
+    double? Fees = null,
+    string? Notes = null);
+
+public sealed record SaleRecord(
+    long Id,
+    string CardId,
+    string CardName,
+    string? SetName,
+    string? Number,
+    string? ImageSmall,
+    int Quantity,
+    string? Variant,
+    string? Condition,
+    string? Grade,
+    double? PurchasePrice,
+    double SalePrice,
+    double? Fees,
+    string SaleDate,
+    string? Notes,
+    string RecordedAt,
+    /// <summary>Proceeds after fees, minus what you paid. Null if cost is unknown.</summary>
+    double? RealisedGain,
+    double Proceeds);

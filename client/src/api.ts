@@ -8,7 +8,9 @@ import type {
   CustomItemRequest,
   FullCard,
   ImportJob,
+  SaleRecord,
   SearchCard,
+  SellRequest,
   SetCard,
   SetSummary,
   UpdateEntryRequest,
@@ -93,6 +95,23 @@ export const api = {
 
   snapshot() {
     return fetch('/api/prices/snapshot', { method: 'POST' }).then(json<{ captured: number }>)
+  },
+
+  sales() {
+    return fetch('/api/sales').then(json<SaleRecord[]>)
+  },
+
+  sell(entryId: number, req: SellRequest) {
+    return fetch(`/api/collection/${entryId}/sell`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(req),
+    }).then(json<{ saleId: number }>)
+  },
+
+  async deleteSale(id: number) {
+    const res = await fetch(`/api/sales/${id}`, { method: 'DELETE' })
+    if (!res.ok) throw new Error('Could not delete that sale record')
   },
 
   settings() {

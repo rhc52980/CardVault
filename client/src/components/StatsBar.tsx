@@ -101,12 +101,23 @@ export function StatsBar({ stats }: { stats: CollectionStats | null }) {
         sub={gain === null ? 'No purchase data yet' : gain >= 0 ? 'Up on cost' : 'Down on cost'}
         accent={gain === null ? undefined : gain >= 0 ? 'text-mint' : 'text-rose'}
       />
-      <Stat
-        label="Best performer"
-        value={stats.biggestGainAmount == null ? '—' : money(stats.biggestGainAmount)}
-        sub={stats.biggestGainCardName ?? 'Needs a purchase price'}
-        accent={stats.biggestGainAmount == null ? undefined : 'text-mint'}
-      />
+      {/* Once you've sold something, banked profit is more interesting than the
+          best card you're still holding. */}
+      {stats.cardsSold > 0 ? (
+        <Stat
+          label="Realised profit"
+          value={money(stats.realisedGain)}
+          sub={`${stats.cardsSold} sold · ${money(stats.saleProceeds)} proceeds`}
+          accent={stats.realisedGain >= 0 ? 'text-mint' : 'text-rose'}
+        />
+      ) : (
+        <Stat
+          label="Best performer"
+          value={stats.biggestGainAmount == null ? '—' : money(stats.biggestGainAmount)}
+          sub={stats.biggestGainCardName ?? 'Needs a purchase price'}
+          accent={stats.biggestGainAmount == null ? undefined : 'text-mint'}
+        />
+      )}
       <Sparkline points={stats.valueHistory} />
     </div>
   )
