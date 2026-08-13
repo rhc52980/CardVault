@@ -1,9 +1,9 @@
 using System.Text.Json;
 using Microsoft.Data.Sqlite;
-using PokemonVault.Data;
-using PokemonVault.Models;
+using CardVault.Data;
+using CardVault.Models;
 
-namespace PokemonVault.Services;
+namespace CardVault.Services;
 
 /// <summary>
 /// Set metadata and completion tracking. Sets are mirrored into SQLite so the

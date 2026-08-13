@@ -1,8 +1,8 @@
 using System.Text.Json;
-using PokemonVault.Data;
-using PokemonVault.Models;
+using CardVault.Data;
+using CardVault.Models;
 
-namespace PokemonVault.Services;
+namespace CardVault.Services;
 
 /// <summary>Reads and writes the cards you own, and values them against cached prices.</summary>
 public sealed class CollectionService(Db db)

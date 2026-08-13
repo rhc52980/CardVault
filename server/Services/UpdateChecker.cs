@@ -1,7 +1,7 @@
 using System.Net.Http.Headers;
 using System.Text.Json;
 
-namespace PokemonVault.Services;
+namespace CardVault.Services;
 
 /// <summary>
 /// Optional, opt-in check for a newer release on GitHub. Off by default —
@@ -25,7 +25,7 @@ public sealed class UpdateChecker(
     public bool Enabled =>
         settings.Get(EnabledSetting) is { } s
             ? s == "true"
-            : config.GetValue("PokemonVault:UpdateCheck", false);
+            : config.GetValue("CardVault:UpdateCheck", false);
 
     public string CurrentVersion => currentVersion;
     public string? LatestVersion { get; private set; }
@@ -59,12 +59,12 @@ public sealed class UpdateChecker(
         try
         {
             LastCheckedUtc = DateTime.UtcNow;
-            var repo = config["PokemonVault:UpdateRepo"] ?? "rhc52980/Pokemon_Vault";
+            var repo = config["CardVault:UpdateRepo"] ?? "rhc52980/CardVault";
 
             using var client = http.CreateClient();
             client.Timeout = TimeSpan.FromSeconds(10);
             // GitHub rejects requests without a User-Agent.
-            client.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("PokemonVault", Sanitise(currentVersion)));
+            client.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("CardVault", Sanitise(currentVersion)));
             client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
 
             var res = await client.GetAsync($"https://api.github.com/repos/{repo}/releases/latest", ct);

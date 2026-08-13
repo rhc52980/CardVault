@@ -1,6 +1,6 @@
 using Microsoft.Data.Sqlite;
 
-namespace PokemonVault.Data;
+namespace CardVault.Data;
 
 /// <summary>
 /// Owns the SQLite file and its schema. Everything the app knows lives here:

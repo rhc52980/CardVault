@@ -1,9 +1,9 @@
 using System.Collections.Concurrent;
 using System.Globalization;
 using System.Text.Json;
-using PokemonVault.Models;
+using CardVault.Models;
 
-namespace PokemonVault.Services;
+namespace CardVault.Services;
 
 /// <summary>
 /// Turns a CSV export into reviewable collection entries.

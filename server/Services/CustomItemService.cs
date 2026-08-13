@@ -1,8 +1,8 @@
 using System.Text.Json;
-using PokemonVault.Data;
-using PokemonVault.Models;
+using CardVault.Data;
+using CardVault.Models;
 
-namespace PokemonVault.Services;
+namespace CardVault.Services;
 
 /// <summary>
 /// Items the catalogue doesn't carry — sealed booster boxes, elite trainer boxes,

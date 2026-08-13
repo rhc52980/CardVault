@@ -1,4 +1,4 @@
-# Pokémon Vault
+# CardVault
 
 A self-hosted app for browsing, valuing and tracking a Pokémon TCG collection.
 Card artwork, set details, attack stats and market prices come from
@@ -273,12 +273,12 @@ moving or reinstalling the app cannot touch it:
 
 | Platform | Location |
 | --- | --- |
-| Windows, run directly | `%LOCALAPPDATA%\PokemonVault` |
-| Linux / macOS, run directly | `~/.local/share/PokemonVault` |
+| Windows, run directly | `%LOCALAPPDATA%\CardVault` |
+| Linux / macOS, run directly | `~/.local/share/CardVault` |
 | Installed as a service | pinned by the installer — see **Installing it** |
 
-Override with `PokemonVault:DataDirectory` in config or the
-`POKEMONVAULT_DATA_DIR` environment variable. The exact path in use is shown on
+Override with `CardVault:DataDirectory` in config or the
+`CARDVAULT_DATA_DIR` environment variable. The exact path in use is shown on
 the Settings tab.
 
 Earlier builds kept the database next to the binary, where replacing the app
@@ -301,16 +301,31 @@ live database. Back up on demand, download, or delete from the Settings tab.
 backup (renamed to `vault.db`), delete any `vault.db-wal` and `vault.db-shm`
 next to it, then start the app again.
 
+## Upgrading from Pokémon Vault
+
+This was called Pokémon Vault until v1.0.0, and the rename moved the service,
+install folder and data directory with it. Nothing needs doing by hand: on first
+start the app finds an existing collection under the old name and copies it
+across, leaving the original in place as a fallback.
+
+If more than one old location exists, the **most recently written** one wins —
+an abandoned folder from an earlier build must never quietly replace the
+collection you've actually been using.
+
+The old Windows service isn't removed automatically. Once you're happy, tidy up
+with `sc.exe delete PokemonVault` (elevated), then delete
+`%LOCALAPPDATA%\PokemonVault` and `C:\PokemonVault`.
+
 ## Installing it
 
-**Windows** — double-click `install\Install-PokemonVault.bat`. It elevates,
-builds the UI and server, installs to `C:\PokemonVault`, registers a
-**PokemonVault** Windows service and starts it. From then on it runs at boot,
+**Windows** — double-click `install\Install-CardVault.bat`. It elevates,
+builds the UI and server, installs to `C:\CardVault`, registers a
+**CardVault** Windows service and starts it. From then on it runs at boot,
 before you log in. `install\Install-DesktopIcon.bat` adds a desktop shortcut.
 
 ### Updating
 
-Pull the latest code and run `install\Update-PokemonVault.bat` (or
+Pull the latest code and run `install\Update-CardVault.bat` (or
 `sudo ./linux/install.sh` again). It's the same script as the installer, and it
 rebuilds into wherever the service currently points rather than assuming the
 default — then refuses to claim success if those two ever diverge.
@@ -323,7 +338,7 @@ update can't be the thing that loses your collection.
 Settings also has an **opt-in** daily check for new GitHub releases. It's off by
 default — nothing leaves the machine unless you turn it on — and it only ever
 reads: you get a badge linking to the release, and run the updater yourself.
-Bump `<Version>` in `server/PokemonVault.csproj` when you cut one.
+Bump `<Version>` in `server/CardVault.csproj` when you cut one.
 
 **Linux** (Debian/Ubuntu, a Proxmox container, a Pi):
 
@@ -331,7 +346,7 @@ Bump `<Version>` in `server/PokemonVault.csproj` when you cut one.
 sudo ./linux/install.sh
 ```
 
-Builds into `/opt/pokemon-vault`, creates an unprivileged `pokemonvault` user,
+Builds into `/opt/card-vault`, creates an unprivileged `cardvault` user,
 installs a systemd unit and starts it.
 
 Both need the .NET SDK and Node.js on the machine to build.
@@ -340,9 +355,9 @@ Both need the .NET SDK and Node.js on the machine to build.
 
 | | Windows | Linux |
 | --- | --- | --- |
-| App | `C:\PokemonVault` | `/opt/pokemon-vault` |
-| Collection | `C:\PokemonVault\data` | `/var/lib/pokemon-vault` |
-| Service | `PokemonVault` | `pokemon-vault` |
+| App | `C:\CardVault` | `/opt/card-vault` |
+| Collection | `C:\CardVault\data` | `/var/lib/card-vault` |
+| Service | `CardVault` | `card-vault` |
 
 The collection is deliberately outside the app folder, so an update replaces the
 application without touching your cards.
@@ -388,7 +403,7 @@ screen has to load.
 the row directly and the app reverts to unprotected:
 
 ```bash
-sqlite3 "$LOCALAPPDATA/PokemonVault/vault.db" "DELETE FROM settings WHERE key='auth_password_hash'; DELETE FROM sessions;"
+sqlite3 "$LOCALAPPDATA/CardVault/vault.db" "DELETE FROM settings WHERE key='auth_password_hash'; DELETE FROM sessions;"
 ```
 
 ## Reaching it from outside your house
@@ -440,7 +455,7 @@ The app ships a web manifest and an apple-touch-icon, so **Add to Home Screen**
 gives you a proper icon and launches without browser chrome — which is the point
 if you're using it from the sofa while sorting cards.
 
-Icons and the in-app logo are generated from `brand/Pokemon_Card_Vault.png` by
+Icons and the in-app logo are generated from `brand/CardVault.png` by
 `python tools/generate-icons.py` (needs Pillow). That file is the source of
 truth — replace it, rerun, and the `.ico`, apple-touch-icon, manifest sizes and
 header logo all follow. Everything it writes into `client/public/` is generated;

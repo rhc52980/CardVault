@@ -1,6 +1,6 @@
-using PokemonVault.Services;
+using CardVault.Services;
 
-namespace PokemonVault.Tests;
+namespace CardVault.Tests;
 
 /// <summary>
 /// The search box guesses what you meant from a few characters, so the rules need

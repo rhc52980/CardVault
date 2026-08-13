@@ -1,8 +1,8 @@
 using System.Reflection;
 using Microsoft.Data.Sqlite;
-using PokemonVault.Data;
+using CardVault.Data;
 
-namespace PokemonVault.Services;
+namespace CardVault.Services;
 
 public sealed record BackupInfo(string Name, long SizeBytes, DateTime CreatedUtc, string Reason);
 
