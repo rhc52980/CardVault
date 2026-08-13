@@ -127,6 +127,8 @@ public sealed record ValuePoint(string Date, double Value);
 
 public sealed record ApiKeyRequest(string? ApiKey);
 
+public sealed record ToggleRequest(bool Enabled);
+
 public sealed record PasswordRequest(string? Password);
 
 public sealed record ChangePasswordRequest(string? CurrentPassword, string? NewPassword);
