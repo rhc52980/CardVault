@@ -8,9 +8,30 @@ namespace PokemonVault.Services;
 /// we store the full payload rather than modelling every field, because the card
 /// schema varies a lot between Pokémon, Trainer and Energy cards.
 /// </summary>
-public sealed class PokemonTcgClient(HttpClient http, ILogger<PokemonTcgClient> log)
+public sealed class PokemonTcgClient(HttpClient http, SettingsService settings, ILogger<PokemonTcgClient> log)
 {
     private const string Base = "https://api.pokemontcg.io/v2";
+
+    /// <summary>Whether a key is available at all — used to warn in the UI.</summary>
+    public bool HasApiKey => !string.IsNullOrWhiteSpace(settings.GetApiKey());
+
+    /// <summary>
+    /// Checks that pokemontcg.io responds when using the given key.
+    ///
+    /// This deliberately does NOT claim the key is valid, because the API gives us
+    /// no way to tell: a correct key, a made-up key and no key at all all return
+    /// 200 with identical headers, and there are no rate-limit headers to compare.
+    /// An invalid key simply gets silently treated as unauthenticated. So all we can
+    /// honestly report is whether the service answered.
+    /// </summary>
+    public async Task<bool> TestConnectionAsync(string key, CancellationToken ct)
+    {
+        using var probe = new HttpRequestMessage(HttpMethod.Get, $"{Base}/sets?pageSize=1");
+        probe.Headers.Add("X-Api-Key", key.Trim());
+
+        using var res = await http.SendAsync(probe, ct);
+        return res.IsSuccessStatusCode;
+    }
 
     public async Task<JsonElement> SearchCardsAsync(string query, int page, int pageSize, CancellationToken ct)
     {
@@ -46,7 +67,12 @@ public sealed class PokemonTcgClient(HttpClient http, ILogger<PokemonTcgClient> 
         const int maxAttempts = 4;
         for (var attempt = 1; ; attempt++)
         {
-            using var res = await http.GetAsync(url, ct);
+            // Built per request so a key entered in the UI applies straight away.
+            using var request = new HttpRequestMessage(HttpMethod.Get, url);
+            var key = settings.GetApiKey();
+            if (!string.IsNullOrWhiteSpace(key)) request.Headers.Add("X-Api-Key", key);
+
+            using var res = await http.SendAsync(request, ct);
 
             if (IsTransient(res.StatusCode) && attempt < maxAttempts)
             {

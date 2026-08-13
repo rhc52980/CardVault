@@ -10,22 +10,22 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: true);
 builder.Configuration.AddEnvironmentVariables();
 
-var apiKey = builder.Configuration["PokemonTcg:ApiKey"]
-             ?? builder.Configuration["POKEMONTCG_API_KEY"];
+// Data lives outside the application folder so replacing the app on update can't
+// take the collection with it. DataPaths also migrates any older in-app copy.
+using var pathsLoggerFactory = LoggerFactory.Create(b => b.AddConsole());
+var paths = new DataPaths(builder.Configuration, pathsLoggerFactory.CreateLogger<DataPaths>());
 
-var dataDir = Path.Combine(AppContext.BaseDirectory, "data");
-var db = new Db(dataDir);
+var db = new Db(paths);
 db.Initialize();
 
+builder.Services.AddSingleton(paths);
 builder.Services.AddSingleton(db);
 builder.Services.AddSingleton<CardCache>();
 builder.Services.AddSingleton<CollectionService>();
+builder.Services.AddSingleton<SettingsService>();
+builder.Services.AddSingleton<BackupService>();
 
-builder.Services.AddHttpClient<PokemonTcgClient>(c =>
-{
-    c.Timeout = TimeSpan.FromSeconds(30);
-    if (!string.IsNullOrWhiteSpace(apiKey)) c.DefaultRequestHeaders.Add("X-Api-Key", apiKey);
-});
+builder.Services.AddHttpClient<PokemonTcgClient>(c => c.Timeout = TimeSpan.FromSeconds(30));
 
 builder.Services.AddHttpClient<ImageCache>(c => c.Timeout = TimeSpan.FromSeconds(30));
 
@@ -45,11 +45,15 @@ builder.WebHost.UseUrls(builder.Configuration["Urls"] ?? "http://0.0.0.0:5188");
 
 var app = builder.Build();
 
-if (string.IsNullOrWhiteSpace(apiKey))
+// Take a backup before anything else touches the data — this is the moment an
+// update would otherwise be able to do damage.
+app.Services.GetRequiredService<BackupService>().RunStartupBackup();
+
+if (!app.Services.GetRequiredService<SettingsService>().GetApiKeyStatus().Configured)
 {
     app.Logger.LogWarning(
         "No pokemontcg.io API key configured — requests will be heavily rate limited. " +
-        "Add one to server/appsettings.Local.json under PokemonTcg:ApiKey.");
+        "Add one on the Settings tab, or in server/appsettings.Local.json under PokemonTcg:ApiKey.");
 }
 
 // pokemontcg.io goes down and times out fairly often. When it does, say so plainly
@@ -177,6 +181,65 @@ app.MapDelete("/api/collection/{id:long}", (long id, CollectionService collectio
     custom.CleanUpOrphans();
     return Results.NoContent();
 });
+
+// ------------------------------------------------------- settings & data safety
+
+app.MapGet("/api/settings", (SettingsService settings, DataPaths paths, BackupService backups) => Results.Ok(new
+{
+    apiKey = settings.GetApiKeyStatus(),
+    dataDirectory = paths.Root,
+    migratedFromLegacy = paths.MigratedFromLegacy,
+    legacyDirectory = DataPaths.LegacyDirectory,
+    backups = backups.List(),
+}));
+
+app.MapPut("/api/settings/api-key", async (
+    ApiKeyRequest req, SettingsService settings, PokemonTcgClient api, CancellationToken ct) =>
+{
+    var key = req.ApiKey?.Trim();
+    if (string.IsNullOrWhiteSpace(key)) return Results.BadRequest(new { error = "Enter a key first." });
+
+    // The key is saved regardless: pokemontcg.io has no way to tell us whether a key
+    // is genuine, so refusing to save on a failed probe would only ever be wrong for
+    // the wrong reason. All we can report is whether the service answered.
+    settings.SetApiKey(key);
+
+    bool reachable;
+    try
+    {
+        reachable = await api.TestConnectionAsync(key, ct);
+    }
+    catch
+    {
+        reachable = false;
+    }
+
+    return Results.Ok(new
+    {
+        saved = true,
+        reachable,
+        apiKey = settings.GetApiKeyStatus(),
+    });
+});
+
+app.MapDelete("/api/settings/api-key", (SettingsService settings) =>
+{
+    settings.ClearApiKey();
+    return Results.Ok(new { apiKey = settings.GetApiKeyStatus() });
+});
+
+app.MapPost("/api/backups", (BackupService backups) => Results.Ok(backups.Create("manual")));
+
+app.MapGet("/api/backups/{name}", (string name, BackupService backups) =>
+{
+    var path = backups.ResolvePath(name);
+    return path is null
+        ? Results.NotFound()
+        : Results.File(path, "application/octet-stream", Path.GetFileName(path));
+});
+
+app.MapDelete("/api/backups/{name}", (string name, BackupService backups)
+    => backups.Delete(name) ? Results.NoContent() : Results.NotFound());
 
 // ------------------------------------------- manual entry: sealed, slabs, oddities
 

@@ -13,11 +13,12 @@ namespace PokemonVault.Services;
 /// treat them like anything else. The `is_custom` flag keeps them out of the places
 /// where they'd be wrong: price refreshes and set completion.
 /// </summary>
-public sealed class CustomItemService(Db db, CollectionService collection, HttpClient http, ILogger<CustomItemService> log)
+public sealed class CustomItemService(
+    Db db, DataPaths paths, CollectionService collection, HttpClient http, ILogger<CustomItemService> log)
 {
     public const string IdPrefix = "custom-";
 
-    private readonly string _imageDir = Path.Combine(AppContext.BaseDirectory, "data", "images");
+    private readonly string _imageDir = paths.ImagesDirectory;
 
     public static bool IsCustomId(string cardId) => cardId.StartsWith(IdPrefix, StringComparison.Ordinal);
 
