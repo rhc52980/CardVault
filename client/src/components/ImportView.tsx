@@ -86,12 +86,7 @@ export function ImportView({ onImported }: { onImported: () => void }) {
       const res = await api.startImport(text)
       setJobId(res.jobId)
     } catch (e) {
-      const message = e instanceof Error ? e.message : 'Could not read that file'
-      try {
-        setError(JSON.parse(message).error ?? message)
-      } catch {
-        setError(message)
-      }
+      setError(e instanceof Error ? e.message : 'Could not read that file')
     }
   }
 

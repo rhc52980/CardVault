@@ -20,6 +20,7 @@ export interface SearchCard {
   variants: string[]
   pricesUpdatedAt?: string | null
   ownedQuantity: number
+  isWanted?: boolean
 }
 
 export interface CollectionItem {
@@ -55,6 +56,44 @@ export interface CollectionItem {
   manualValue?: number | null
   /** True for sealed product and anything else entered by hand. */
   isCustom: boolean
+  /** Where the card physically lives. */
+  location?: string | null
+}
+
+export interface WantItem {
+  id: number
+  cardId: string
+  name: string
+  setName?: string | null
+  number?: string | null
+  rarity?: string | null
+  imageSmall?: string | null
+  variant: string
+  variants: string[]
+  quantity: number
+  targetPrice?: number | null
+  notes?: string | null
+  addedAt: string
+  marketPrice?: number | null
+  /** Market minus target; negative means it's going for less than you'd pay. */
+  differenceToTarget?: number | null
+  atOrBelowTarget: boolean
+}
+
+export interface AddWantRequest {
+  cardId: string
+  variant?: string
+  targetPrice?: number | null
+  quantity?: number
+  notes?: string | null
+}
+
+export interface UpdateWantRequest {
+  targetPrice?: number | null
+  quantity?: number
+  notes?: string | null
+  variant?: string
+  clearTarget?: boolean
 }
 
 export interface SetBreakdown {
@@ -143,6 +182,7 @@ export interface AddEntryRequest {
   purchaseDate?: string | null
   notes?: string | null
   manualValue?: number | null
+  location?: string | null
 }
 
 export interface UpdateEntryRequest extends Partial<Omit<AddEntryRequest, 'cardId'>> {

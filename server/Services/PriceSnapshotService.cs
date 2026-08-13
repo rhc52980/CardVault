@@ -139,16 +139,27 @@ public sealed class PriceSnapshotService(
         return series;
     }
 
+    /// <summary>
+    /// Cards worth refreshing: everything you own, plus everything on the want list.
+    /// A want with a target price is only useful if its market price is current.
+    /// </summary>
     private List<string> OwnedCardIds()
     {
         using var conn = db.Open();
         using var cmd = conn.CreateCommand();
         // Custom items have no catalogue entry to refresh — their value is yours to set.
         cmd.CommandText = """
-            SELECT DISTINCT c.card_id
-            FROM collection c
-            JOIN cards k ON k.id = c.card_id
-            WHERE COALESCE(k.is_custom, 0) = 0
+            SELECT DISTINCT card_id FROM (
+                SELECT c.card_id AS card_id
+                FROM collection c
+                JOIN cards k ON k.id = c.card_id
+                WHERE COALESCE(k.is_custom, 0) = 0
+                UNION
+                SELECT w.card_id
+                FROM wants w
+                JOIN cards k2 ON k2.id = w.card_id
+                WHERE COALESCE(k2.is_custom, 0) = 0
+            )
             """;
         var ids = new List<string>();
         using var r = cmd.ExecuteReader();

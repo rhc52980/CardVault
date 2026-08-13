@@ -39,6 +39,7 @@ public sealed class ImportService(
         ["purchasePrice"] = ["purchase price", "purchaseprice", "paid", "price paid", "cost", "buy price", "my price"],
         ["purchaseDate"] = ["purchase date", "purchasedate", "date acquired", "acquired", "date added", "date"],
         ["notes"] = ["notes", "note", "comment", "comments", "description"],
+        ["location"] = ["location", "storage", "binder", "box", "where", "stored", "placement"],
     };
 
     public ImportJob? Get(string id) => _jobs.GetValueOrDefault(id);
@@ -157,6 +158,7 @@ public sealed class ImportService(
             PurchasePrice = ParseMoney(Get("purchasePrice")),
             PurchaseDate = ParseDate(Get("purchaseDate")),
             Notes = Get("notes"),
+            Location = Get("location"),
         };
 
         // Held separately from the resolved card's own values until we match it.
@@ -397,7 +399,8 @@ public sealed class ImportService(
                 Grade: row.Grade,
                 PurchasePrice: row.PurchasePrice,
                 PurchaseDate: row.PurchaseDate,
-                Notes: row.Notes));
+                Notes: row.Notes,
+                Location: row.Location));
 
             // Same as a single add: give each imported card a starting price point.
             snapshots.RecordCurrentPrices(row.CardId);

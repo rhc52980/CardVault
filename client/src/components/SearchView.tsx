@@ -13,6 +13,17 @@ export function SearchView({ onCollectionChanged }: { onCollectionChanged: () =>
   const [adding, setAdding] = useState<SearchCard | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
+  /** Adds to the want list with no target yet — the price is set on the Wanted pane. */
+  async function addWant(card: SearchCard) {
+    try {
+      await api.addWant({ cardId: card.id, variant: card.variants[0] ?? 'normal' })
+      setResults((rs) => rs.map((r) => (r.id === card.id ? { ...r, isWanted: true } : r)))
+      onCollectionChanged()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not add to your want list')
+    }
+  }
+
   useEffect(() => {
     inputRef.current?.focus()
   }, [])
@@ -112,15 +123,28 @@ export function SearchView({ onCollectionChanged }: { onCollectionChanged: () =>
                   ) : null
                 }
                 footer={
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setAdding(card)
-                    }}
-                    className="w-full rounded-lg bg-arc py-1.5 text-xs font-medium text-white transition hover:brightness-110"
-                  >
-                    Add to vault
-                  </button>
+                  <div className="flex gap-1.5">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setAdding(card)
+                      }}
+                      className="flex-1 rounded-lg bg-arc py-1.5 text-xs font-medium text-white transition hover:brightness-110"
+                    >
+                      Add to vault
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        void addWant(card)
+                      }}
+                      disabled={card.isWanted}
+                      title={card.isWanted ? 'Already on your want list' : 'Add to your want list'}
+                      className="rounded-lg border border-white/25 bg-black/40 px-2 py-1.5 text-xs text-white transition hover:border-white/50 disabled:opacity-50"
+                    >
+                      {card.isWanted ? 'Wanted' : 'Want'}
+                    </button>
+                  </div>
                 }
                 onClick={() => setAdding(card)}
               />

@@ -13,7 +13,7 @@ public sealed class CollectionService(Db db)
                k.name, k.set_id, k.set_name, k.set_series, k.number, k.rarity,
                k.supertype, k.types, k.hp, k.artist, k.release_date,
                k.image_small, k.image_large, k.payload,
-               c.manual_value, k.is_custom
+               c.manual_value, k.is_custom, c.location
         FROM collection c
         JOIN cards k ON k.id = c.card_id
         """;
@@ -36,9 +36,11 @@ public sealed class CollectionService(Db db)
         using var cmd = conn.CreateCommand();
         cmd.CommandText = """
             INSERT INTO collection (card_id, quantity, variant, condition, grade,
-                                    purchase_price, purchase_date, notes, manual_value, added_at)
+                                    purchase_price, purchase_date, notes, manual_value,
+                                    location, added_at)
             VALUES ($cardId, $quantity, $variant, $condition, $grade,
-                    $purchasePrice, $purchaseDate, $notes, $manualValue, $addedAt);
+                    $purchasePrice, $purchaseDate, $notes, $manualValue,
+                    $location, $addedAt);
             SELECT last_insert_rowid();
             """;
         cmd.Parameters.AddWithValue("$cardId", req.CardId);
@@ -50,6 +52,7 @@ public sealed class CollectionService(Db db)
         cmd.Parameters.AddWithValue("$purchaseDate", (object?)req.PurchaseDate ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$notes", (object?)req.Notes ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$manualValue", (object?)req.ManualValue ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$location", (object?)req.Location ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$addedAt", DateTime.UtcNow.ToString("o"));
         return (long)(cmd.ExecuteScalar() ?? 0L);
     }
@@ -75,6 +78,13 @@ public sealed class CollectionService(Db db)
         Set("purchase_price", "purchasePrice", req.PurchasePrice);
         Set("purchase_date", "purchaseDate", req.PurchaseDate);
         Set("notes", "notes", req.Notes);
+
+        // An empty string clears the location; null still means "leave alone".
+        if (req.Location is not null)
+        {
+            sets.Add("location = $location");
+            pars["$location"] = req.Location.Trim().Length == 0 ? DBNull.Value : req.Location.Trim();
+        }
 
         // Clearing needs an explicit flag: a null ManualValue means "leave alone",
         // otherwise you could never go back to tracking market price.
@@ -235,6 +245,7 @@ public sealed class CollectionService(Db db)
             LineValue: unitValue is { } v ? Math.Round(v * quantity, 2) : null,
             PricesUpdatedAt: Pricing.TcgUpdatedAt(card),
             ManualValue: manualValue,
-            IsCustom: isCustom);
+            IsCustom: isCustom,
+            Location: r.IsDBNull(26) ? null : r.GetString(26));
     }
 }
