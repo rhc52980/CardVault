@@ -440,9 +440,21 @@ The app ships a web manifest and an apple-touch-icon, so **Add to Home Screen**
 gives you a proper icon and launches without browser chrome — which is the point
 if you're using it from the sofa while sorting cards.
 
-Icons are generated from `client/public/favicon.svg` by
-`python tools/generate-icons.py` (needs Pillow). Edit the SVG, rerun it, and the
-`.ico`, apple-touch-icon and manifest sizes all follow.
+Icons and the in-app logo are generated from `brand/Pokemon_Card_Vault.png` by
+`python tools/generate-icons.py` (needs Pillow). That file is the source of
+truth — replace it, rerun, and the `.ico`, apple-touch-icon, manifest sizes and
+header logo all follow. Everything it writes into `client/public/` is generated;
+don't edit those by hand.
+
+Two decisions the script makes deliberately:
+
+- **The `.ico` is cropped to the vault**, not the whole logo. The full artwork
+  turns to mush below about 32px — the wordmark and fanned cards are far too
+  fine — so browser tabs get a simplified image. That's what multi-resolution
+  icons are for.
+- **Outputs are palette-reduced to 256 colours.** A full-colour 256px PNG of
+  this artwork is ~145KB, which is a lot for something the header loads on every
+  page view; quantised it's ~35KB with no visible difference at display size.
 
 ## Licence
 
@@ -466,6 +478,8 @@ server/            ASP.NET Core API + static host
                    CSV parser and import jobs, want list, sales ledger, export,
                    authentication, settings, backups
   Program.cs       Minimal API endpoints
+brand/             Source artwork; everything under client/public/ is generated
+                   from it by tools/generate-icons.py
 install/           Windows installer/updater, launcher and desktop shortcut
 linux/             systemd unit and install.sh
 tools/             generate-icons.py — regenerates the raster app icons from
