@@ -119,7 +119,13 @@ cache resolve instantly, so re-importing is fast.
 
 ## Setup
 
-The API key lives in `server/appsettings.Local.json`, which is gitignored:
+Get a free key from [dev.pokemontcg.io](https://dev.pokemontcg.io) and paste it
+into the **Settings** tab. It's stored in your local database, takes effect
+immediately, and is only ever displayed back partly masked. The app runs without
+a key but is heavily rate limited.
+
+If you'd rather not use the UI, `server/appsettings.Local.json` (gitignored) and
+the `POKEMONTCG_API_KEY` environment variable both still work:
 
 ```json
 {
@@ -129,8 +135,47 @@ The API key lives in `server/appsettings.Local.json`, which is gitignored:
 }
 ```
 
-`POKEMONTCG_API_KEY` works as an environment variable too. The app runs without a
-key but is heavily rate limited.
+A key saved through the UI takes precedence over both.
+
+> **The API can't verify keys.** A correct key, a mistyped key and no key at all
+> all get an identical 200 response with no rate-limit headers to compare, so
+> nothing can tell you a key is genuine — an invalid one is silently treated as
+> unauthenticated. Saving only confirms the service answered. If searches feel
+> slow or rate-limited, re-check what you pasted.
+
+## Your data and backups
+
+**Your collection is stored outside the application folder**, so updating,
+moving or reinstalling the app cannot touch it:
+
+| Platform | Location |
+| --- | --- |
+| Windows | `%LOCALAPPDATA%\PokemonVault` |
+| Linux / macOS | `~/.local/share/PokemonVault` |
+
+Override with `PokemonVault:DataDirectory` in config or the
+`POKEMONVAULT_DATA_DIR` environment variable. The exact path in use is shown on
+the Settings tab.
+
+Earlier builds kept the database next to the binary, where replacing the app
+folder on update would have destroyed it. If such a collection is found it's
+**copied** to the new location on startup — the original is left untouched so
+you have a fallback.
+
+Backups are taken automatically:
+
+- **Whenever the app version changes** — the update case, and the one most likely
+  to lose data. Taken before anything else touches the database.
+- **Once a day** otherwise.
+- The ten most recent are kept; older ones are pruned.
+
+They're written with SQLite's backup API rather than copied, because with
+write-ahead logging on, the `.db` file alone can be an incomplete picture of a
+live database. Back up on demand, download, or delete from the Settings tab.
+
+**To restore one:** stop the app, replace `vault.db` in the data folder with the
+backup (renamed to `vault.db`), delete any `vault.db-wal` and `vault.db-shm`
+next to it, then start the app again.
 
 ## Running it
 
@@ -160,8 +205,6 @@ fully self-contained — no .NET runtime install required on the target machine.
 
 ## Data and network notes
 
-- Your collection lives in `server/data/vault.db` (alongside cached images in
-  `server/data/images/`). Back that file up; everything else can be rebuilt.
 - The server binds to `0.0.0.0:5188` so other devices on your network can reach
   it. **There is no authentication** — it assumes a trusted home network. To keep
   it local-only, set `ASPNETCORE_URLS=http://localhost:5188`.
@@ -174,13 +217,14 @@ fully self-contained — no .NET runtime install required on the target machine.
 
 ```
 server/            ASP.NET Core API + static host
+  Data/DataPaths.cs  Resolves the per-user data directory, migrates old installs
   Data/Db.cs       SQLite schema: cards, collection, price_history, sets,
-                   plus additive migrations for existing databases
+                   settings, plus additive migrations for existing databases
   Services/        API client, card cache, collection, pricing, image cache,
                    daily price snapshots, sets + completion, custom items,
-                   CSV parser and import jobs
+                   CSV parser and import jobs, settings, backups
   Program.cs       Minimal API endpoints
 client/            React frontend (builds into server/wwwroot)
   src/components/  Card grid, search, set browser, detail modal, stats,
-                   CSV import
+                   CSV import, manual entry, settings
 ```

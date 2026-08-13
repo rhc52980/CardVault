@@ -116,3 +116,5 @@ public sealed record SetCard(
     int OwnedQuantity);
 
 public sealed record ValuePoint(string Date, double Value);
+
+public sealed record ApiKeyRequest(string? ApiKey);

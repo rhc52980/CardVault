@@ -8,9 +8,9 @@ namespace PokemonVault.Services;
 /// change, so this makes the grid instant on repeat visits and keeps the collection
 /// viewable with no internet connection.
 /// </summary>
-public sealed class ImageCache(Db db, HttpClient http, ILogger<ImageCache> log)
+public sealed class ImageCache(Db db, DataPaths paths, HttpClient http, ILogger<ImageCache> log)
 {
-    private readonly string _dir = Path.Combine(AppContext.BaseDirectory, "data", "images");
+    private readonly string _dir = paths.ImagesDirectory;
 
     // Guards against a burst of grid requests all downloading the same file at once.
     private readonly SemaphoreSlim _gate = new(8);
