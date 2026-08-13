@@ -145,7 +145,7 @@ app.MapGet("/api/search", async (
     WantsService wants,
     CancellationToken ct) =>
 {
-    var query = BuildQuery(q, set);
+    var query = SearchQuery.Build(q, set);
     if (query is null) return Results.Ok(new { data = Array.Empty<object>(), totalCount = 0, page = 1 });
 
     var res = await api.SearchCardsAsync(query, Math.Max(1, page), Math.Clamp(pageSize is 0 ? 24 : pageSize, 1, 100), ct);
@@ -573,26 +573,6 @@ static void IssueSessionCookie(HttpContext ctx, AuthService auth)
 }
 
 static string ClientKey(HttpContext ctx) => ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-
-/// <summary>
-/// Turns whatever the user typed into a pokemontcg.io query. Free text becomes a
-/// wildcard name search; anything containing a colon is passed through so power
-/// users can write things like <c>rarity:"Rare Holo" types:Fire</c>.
-/// </summary>
-static string? BuildQuery(string? q, string? set)
-{
-    var parts = new List<string>();
-
-    if (!string.IsNullOrWhiteSpace(q))
-    {
-        var trimmed = q.Trim();
-        parts.Add(trimmed.Contains(':') ? trimmed : $"name:\"*{trimmed.Replace("\"", "")}*\"");
-    }
-
-    if (!string.IsNullOrWhiteSpace(set)) parts.Add($"set.id:{set.Trim()}");
-
-    return parts.Count == 0 ? null : string.Join(" ", parts);
-}
 
 static object Summarize(JsonElement card, IReadOnlyDictionary<string, int> owned, IReadOnlySet<string> wanted)
 {
