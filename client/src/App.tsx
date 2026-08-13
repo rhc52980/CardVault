@@ -83,9 +83,13 @@ export default function App() {
       <div className="relative z-10 mx-auto max-w-[1600px] px-5 py-6 sm:px-8">
         <header className="mb-6 flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-arc to-gold text-lg shadow-lg">
-              ◈
-            </div>
+            <img
+              src="/logo.png"
+              alt=""
+              width={40}
+              height={40}
+              className="h-10 w-10 shrink-0 rounded-xl shadow-lg"
+            />
             <div>
               <h1 className="text-xl font-semibold tracking-tight">
                 Pokémon Vault

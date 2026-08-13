@@ -27,14 +27,10 @@ export function LoginScreen({ status, onSignedIn }: { status: AuthStatus; onSign
   return (
     <div className="aurora relative flex min-h-full items-center justify-center px-5 py-16">
       <div className="relative z-10 w-full max-w-sm">
-        <div className="mb-6 flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-arc to-gold text-lg shadow-lg">
-            ◈
-          </div>
-          <div>
-            <h1 className="text-xl font-semibold tracking-tight">Pokémon Vault</h1>
-            <p className="text-xs text-mute">Sign in to see your collection</p>
-          </div>
+        {/* Room to breathe here, so the full logo gets used rather than a mark. */}
+        <div className="mb-6 text-center">
+          <img src="/logo.png" alt="Pokémon Card Vault" className="mx-auto h-32 w-32 drop-shadow-2xl" />
+          <p className="mt-3 text-sm text-mute">Sign in to see your collection</p>
         </div>
 
         <form onSubmit={submit} className="panel rounded-2xl p-5">
