@@ -273,8 +273,9 @@ moving or reinstalling the app cannot touch it:
 
 | Platform | Location |
 | --- | --- |
-| Windows | `%LOCALAPPDATA%\PokemonVault` |
-| Linux / macOS | `~/.local/share/PokemonVault` |
+| Windows, run directly | `%LOCALAPPDATA%\PokemonVault` |
+| Linux / macOS, run directly | `~/.local/share/PokemonVault` |
+| Installed as a service | pinned by the installer — see **Installing it** |
 
 Override with `PokemonVault:DataDirectory` in config or the
 `POKEMONVAULT_DATA_DIR` environment variable. The exact path in use is shown on
@@ -300,31 +301,57 @@ live database. Back up on demand, download, or delete from the Settings tab.
 backup (renamed to `vault.db`), delete any `vault.db-wal` and `vault.db-shm`
 next to it, then start the app again.
 
-## Running it
+## Installing it
 
-Build the frontend, then start the server:
+**Windows** — double-click `install\Install-PokemonVault.bat`. It elevates,
+builds the UI and server, installs to `C:\PokemonVault`, registers a
+**PokemonVault** Windows service and starts it. From then on it runs at boot,
+before you log in. `install\Install-DesktopIcon.bat` adds a desktop shortcut.
+
+To update after pulling new code, run `install\Update-PokemonVault.bat` — it's
+the same script, and it rebuilds into wherever the service currently points
+rather than assuming the default.
+
+**Linux** (Debian/Ubuntu, a Proxmox container, a Pi):
+
+```bash
+sudo ./linux/install.sh
+```
+
+Builds into `/opt/pokemon-vault`, creates an unprivileged `pokemonvault` user,
+installs a systemd unit and starts it.
+
+Both need the .NET SDK and Node.js on the machine to build.
+
+### Where things go
+
+| | Windows | Linux |
+| --- | --- | --- |
+| App | `C:\PokemonVault` | `/opt/pokemon-vault` |
+| Collection | `C:\PokemonVault\data` | `/var/lib/pokemon-vault` |
+| Service | `PokemonVault` | `pokemon-vault` |
+
+The collection is deliberately outside the app folder, so an update replaces the
+application without touching your cards.
+
+**Why the installer pins the data directory:** left to its default the app uses
+the per-user data folder, and a Windows service account has a *different* one —
+the service would come up with an empty collection while yours sat in your
+profile. The installer writes an explicit path and copies an existing per-user
+collection across on first install, leaving the original as a fallback.
+
+## Running it without installing
 
 ```bash
 cd client && npm install && npm run build && cd ../server && dotnet run
 ```
 
-Then open <http://localhost:5188>.
-
-For frontend work, run Vite's dev server for hot reload — it proxies `/api` and
-`/img` to the backend on 5188:
+Then open <http://localhost:5188>. For frontend work, Vite's dev server gives
+hot reload and proxies `/api` and `/img` to the backend:
 
 ```bash
 cd client && npm run dev
 ```
-
-## Publishing a standalone build
-
-```bash
-cd client && npm run build && cd ../server && dotnet publish -c Release -r win-x64 --self-contained
-```
-
-Swap `win-x64` for `linux-x64` or `osx-arm64` as needed. The output folder is
-fully self-contained — no .NET runtime install required on the target machine.
 
 ## Password protection
 
@@ -426,6 +453,8 @@ server/            ASP.NET Core API + static host
                    CSV parser and import jobs, want list, sales ledger, export,
                    authentication, settings, backups
   Program.cs       Minimal API endpoints
+install/           Windows installer/updater, launcher and desktop shortcut
+linux/             systemd unit and install.sh
 tools/             generate-icons.py — regenerates the raster app icons from
                    the same design as client/public/favicon.svg
 tests/             xunit tests (`dotnet test tests`) — currently the search

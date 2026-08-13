@@ -1,0 +1,21 @@
+[Unit]
+Description=Pokemon Vault - Pokemon TCG collection tracker
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=notify
+ExecStart=/opt/pokemon-vault/PokemonVault
+WorkingDirectory=/opt/pokemon-vault
+Restart=on-failure
+RestartSec=5
+
+# Runs as its own unprivileged user; the port is above 1024 so no capabilities
+# are needed. The collection lives outside the install folder so that updates
+# can replace /opt/pokemon-vault wholesale.
+User=pokemonvault
+Group=pokemonvault
+Environment=POKEMONVAULT_DATA_DIR=/var/lib/pokemon-vault
+
+[Install]
+WantedBy=multi-user.target

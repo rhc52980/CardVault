@@ -4,10 +4,32 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>PokemonVault</AssemblyName>
+
+    <!-- Single source of truth for the app version. The backup service reads it
+         to detect an update and snapshot the database before carrying on, so it
+         has to be bumped on release for that protection to fire. -->
+    <Version>1.0.0</Version>
   </PropertyGroup>
+
+  <!-- Stamped in at build time. The version alone can't tell two builds apart
+       between releases; this can. -->
+  <ItemGroup>
+    <AssemblyMetadata Include="BuildDate" Value="$([System.DateTime]::UtcNow.ToString(`yyyy-MM-dd HH:mm`))" />
+  </ItemGroup>
+
+  <!-- Never ship the local secrets file. The Web SDK treats every appsettings*.json
+       as content, so this would otherwise be copied into the publish output and
+       travel with any zip of it. The API key belongs in the database (Settings)
+       or in a file placed deliberately on the target machine. -->
+  <ItemGroup>
+    <Content Update="appsettings.Local.json" CopyToOutputDirectory="Never" CopyToPublishDirectory="Never" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.11" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Systemd" Version="10.0.11" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="10.0.11" />
   </ItemGroup>
 
 </Project>
