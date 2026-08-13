@@ -5,6 +5,8 @@ import type {
   FullCard,
   ImportJob,
   SearchCard,
+  SetCard,
+  SetSummary,
 } from './types'
 
 async function json<T>(res: Response): Promise<T> {
@@ -63,6 +65,14 @@ export const api = {
 
   snapshot() {
     return fetch('/api/prices/snapshot', { method: 'POST' }).then(json<{ captured: number }>)
+  },
+
+  sets() {
+    return fetch('/api/sets').then(json<SetSummary[]>)
+  },
+
+  setCards(setId: string) {
+    return fetch(`/api/sets/${encodeURIComponent(setId)}/cards`).then(json<SetCard[]>)
   },
 
   startImport(csv: string) {

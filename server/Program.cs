@@ -32,6 +32,7 @@ builder.Services.AddHttpClient<ImageCache>(c => c.Timeout = TimeSpan.FromSeconds
 builder.Services.AddSingleton<PriceSnapshotService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<PriceSnapshotService>());
 builder.Services.AddSingleton<ImportService>();
+builder.Services.AddSingleton<SetsService>();
 
 // Serialize enums as names so the UI reads "Ambiguous" rather than 1.
 builder.Services.ConfigureHttpJsonOptions(o =>
@@ -124,10 +125,15 @@ app.MapGet("/api/cards/{id}", async (string id, PokemonTcgClient api, CardCache 
     return Results.Content(payload, "application/json");
 });
 
-app.MapGet("/api/sets", async (PokemonTcgClient api, CancellationToken ct) =>
+// ------------------------------------------------------- sets & set completion
+
+app.MapGet("/api/sets", async (SetsService sets, CancellationToken ct)
+    => Results.Ok(await sets.ListAsync(ct)));
+
+app.MapGet("/api/sets/{setId}/cards", async (string setId, SetsService sets, CancellationToken ct) =>
 {
-    var res = await api.GetSetsAsync(ct);
-    return Results.Content(res.GetRawText(), "application/json");
+    var cards = await sets.CardsInSetAsync(setId, ct);
+    return cards.Count == 0 ? Results.NotFound(new { error = $"No cards found for set '{setId}'." }) : Results.Ok(cards);
 });
 
 // ------------------------------------------------------------------ collection

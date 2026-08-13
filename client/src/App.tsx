@@ -3,10 +3,11 @@ import { api } from './api'
 import { CollectionView } from './components/CollectionView'
 import { ImportView } from './components/ImportView'
 import { SearchView } from './components/SearchView'
+import { SetsView } from './components/SetsView'
 import { StatsBar } from './components/StatsBar'
 import type { CollectionItem, CollectionStats } from './types'
 
-type Tab = 'vault' | 'search' | 'import'
+type Tab = 'vault' | 'sets' | 'search' | 'import'
 
 export default function App() {
   const [tab, setTab] = useState<Tab>('vault')
@@ -50,6 +51,7 @@ export default function App() {
             {(
               [
                 ['vault', 'My vault'],
+                ['sets', 'Sets'],
                 ['search', 'Add cards'],
                 ['import', 'Import CSV'],
               ] as const
@@ -88,6 +90,7 @@ export default function App() {
               onGoToSearch={() => setTab('search')}
             />
           )}
+          {tab === 'sets' && <SetsView onCollectionChanged={refresh} />}
           {tab === 'search' && <SearchView onCollectionChanged={refresh} />}
           {tab === 'import' && <ImportView onImported={refresh} />}
         </main>
