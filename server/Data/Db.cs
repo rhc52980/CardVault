@@ -1,0 +1,135 @@
+using Microsoft.Data.Sqlite;
+
+namespace PokemonVault.Data;
+
+/// <summary>
+/// Owns the SQLite file and its schema. Everything the app knows lives here:
+/// cached card metadata from pokemontcg.io, the cards you actually own, and a
+/// daily price snapshot so we can chart collection value over time.
+/// </summary>
+public sealed class Db
+{
+    private readonly string _connectionString;
+
+    public Db(string dataDirectory)
+    {
+        Directory.CreateDirectory(dataDirectory);
+        var path = Path.Combine(dataDirectory, "vault.db");
+        _connectionString = new SqliteConnectionStringBuilder
+        {
+            DataSource = path,
+            Mode = SqliteOpenMode.ReadWriteCreate,
+            Cache = SqliteCacheMode.Shared,
+        }.ToString();
+    }
+
+    public SqliteConnection Open()
+    {
+        var conn = new SqliteConnection(_connectionString);
+        conn.Open();
+        using var pragma = conn.CreateCommand();
+        pragma.CommandText = "PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;";
+        pragma.ExecuteNonQuery();
+        return conn;
+    }
+
+    public void Initialize()
+    {
+        using var conn = Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = """
+            CREATE TABLE IF NOT EXISTS cards (
+                id            TEXT PRIMARY KEY,
+                name          TEXT NOT NULL,
+                set_id        TEXT,
+                set_name      TEXT,
+                set_series    TEXT,
+                number        TEXT,
+                rarity        TEXT,
+                supertype     TEXT,
+                subtypes      TEXT,
+                types         TEXT,
+                hp            TEXT,
+                artist        TEXT,
+                release_date  TEXT,
+                image_small   TEXT,
+                image_large   TEXT,
+                payload       TEXT NOT NULL,
+                cached_at     TEXT NOT NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_cards_name ON cards(name);
+            CREATE INDEX IF NOT EXISTS idx_cards_set  ON cards(set_id);
+
+            CREATE TABLE IF NOT EXISTS collection (
+                id             INTEGER PRIMARY KEY AUTOINCREMENT,
+                card_id        TEXT NOT NULL REFERENCES cards(id),
+                quantity       INTEGER NOT NULL DEFAULT 1,
+                variant        TEXT NOT NULL DEFAULT 'normal',
+                condition      TEXT NOT NULL DEFAULT 'NM',
+                grade          TEXT,
+                purchase_price REAL,
+                purchase_date  TEXT,
+                notes          TEXT,
+                added_at       TEXT NOT NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_collection_card ON collection(card_id);
+
+            -- One row per card+variant+day. Lets us chart what the collection is
+            -- worth over time, which the API itself does not expose.
+            CREATE TABLE IF NOT EXISTS price_history (
+                card_id     TEXT NOT NULL,
+                variant     TEXT NOT NULL,
+                captured_on TEXT NOT NULL,
+                market      REAL,
+                low         REAL,
+                mid         REAL,
+                high        REAL,
+                PRIMARY KEY (card_id, variant, captured_on)
+            );
+
+            CREATE TABLE IF NOT EXISTS sets (
+                id           TEXT PRIMARY KEY,
+                name         TEXT NOT NULL,
+                series       TEXT,
+                printed_total INTEGER,
+                total        INTEGER,
+                release_date TEXT,
+                logo         TEXT,
+                symbol       TEXT,
+                cached_at    TEXT NOT NULL
+            );
+            """;
+        cmd.ExecuteNonQuery();
+
+        Migrate(conn);
+    }
+
+    /// <summary>
+    /// Additive migrations for databases created by earlier versions. SQLite has no
+    /// "ADD COLUMN IF NOT EXISTS", so we check the table info first.
+    /// </summary>
+    private static void Migrate(SqliteConnection conn)
+    {
+        // Lets a graded slab carry its own worth: a PSA 10 bears no relation to the
+        // raw market price the API reports, and sealed product has no price at all.
+        AddColumn(conn, "collection", "manual_value", "REAL");
+
+        // Marks synthetic cards (sealed product, anything not in the catalogue) so
+        // they can be skipped by price refreshes and set completion.
+        AddColumn(conn, "cards", "is_custom", "INTEGER NOT NULL DEFAULT 0");
+    }
+
+    private static void AddColumn(SqliteConnection conn, string table, string column, string definition)
+    {
+        using var check = conn.CreateCommand();
+        check.CommandText = $"SELECT COUNT(*) FROM pragma_table_info('{table}') WHERE name = $name";
+        check.Parameters.AddWithValue("$name", column);
+        if (Convert.ToInt64(check.ExecuteScalar()) > 0) return;
+
+        using var alter = conn.CreateCommand();
+        alter.CommandText = $"ALTER TABLE {table} ADD COLUMN {column} {definition}";
+        alter.ExecuteNonQuery();
+    }
+}

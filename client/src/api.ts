@@ -2,11 +2,13 @@ import type {
   AddEntryRequest,
   CollectionItem,
   CollectionStats,
+  CustomItemRequest,
   FullCard,
   ImportJob,
   SearchCard,
   SetCard,
   SetSummary,
+  UpdateEntryRequest,
 } from './types'
 
 async function json<T>(res: Response): Promise<T> {
@@ -49,7 +51,30 @@ export const api = {
     }).then(json<{ id: number }>)
   },
 
-  async update(id: number, patch: Partial<AddEntryRequest>) {
+  /**
+   * Creates a sealed box, slab or other item the catalogue doesn't carry. Sent as
+   * multipart when an image file is attached, JSON otherwise.
+   */
+  addCustom(item: CustomItemRequest, image?: File | null) {
+    if (image) {
+      const form = new FormData()
+      for (const [k, v] of Object.entries(item)) {
+        if (v !== null && v !== undefined && v !== '') form.append(k, String(v))
+      }
+      form.append('image', image)
+      return fetch('/api/custom', { method: 'POST', body: form }).then(
+        json<{ cardId: string; entryId: number }>,
+      )
+    }
+
+    return fetch('/api/custom', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(item),
+    }).then(json<{ cardId: string; entryId: number }>)
+  },
+
+  async update(id: number, patch: UpdateEntryRequest) {
     const res = await fetch(`/api/collection/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
