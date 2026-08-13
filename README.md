@@ -374,6 +374,15 @@ ASPNETCORE_URLS=http://127.0.0.1:5188 dotnet run
   as a clear message rather than breaking the page — your saved collection is
   served entirely from local data and is unaffected.
 
+## Licence
+
+[MIT](LICENSE) — use it, change it, redistribute it, no obligations.
+
+Card data, artwork and prices come from [pokemontcg.io](https://pokemontcg.io)
+and are subject to their terms; Pokémon and all associated names are trademarks
+of Nintendo, Creatures Inc. and GAME FREAK Inc. This project isn't affiliated
+with or endorsed by any of them.
+
 ## Layout
 
 ```
