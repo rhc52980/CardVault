@@ -18,6 +18,9 @@ export default function App() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [auth, setAuth] = useState<AuthStatus | null>(null)
+  const [appVersion, setAppVersion] = useState('')
+  const [buildDate, setBuildDate] = useState('')
+  const [updateAvailable, setUpdateAvailable] = useState<{ latest?: string | null; url?: string | null } | null>(null)
 
   const checkAuth = useCallback(async () => {
     try {
@@ -35,6 +38,19 @@ export default function App() {
       setItems(collection)
       setStats(statistics)
       setError(null)
+
+      // Version lives on the settings payload; fetched separately so a settings
+      // failure can never stop the collection rendering.
+      void api
+        .settings()
+        .then((s) => {
+          setAppVersion(s.version.split('+')[0])
+          setBuildDate(s.buildDate)
+          setUpdateAvailable(
+            s.update.available ? { latest: s.update.latest, url: s.update.releaseUrl } : null,
+          )
+        })
+        .catch(() => {})
     } catch (e) {
       // A session can expire while the tab is open; re-check so the login screen
       // takes over rather than leaving a stuck error on screen.
@@ -71,10 +87,31 @@ export default function App() {
               ◈
             </div>
             <div>
-              <h1 className="text-xl font-semibold tracking-tight">Pokémon Vault</h1>
+              <h1 className="text-xl font-semibold tracking-tight">
+                Pokémon Vault
+                {appVersion && (
+                  <span
+                    className="ml-2 align-middle font-mono text-[11px] font-normal text-mute"
+                    title={buildDate ? `Built ${buildDate} UTC` : undefined}
+                  >
+                    {appVersion}
+                  </span>
+                )}
+              </h1>
               <p className="text-xs text-mute">Your collection, valued daily</p>
             </div>
           </div>
+
+          {updateAvailable && (
+            <a
+              href={updateAvailable.url ?? '#'}
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-lg bg-gold/15 px-3 py-1.5 text-xs text-gold ring-1 ring-gold/30 transition hover:brightness-110"
+            >
+              {updateAvailable.latest} available ↗
+            </a>
+          )}
 
           <nav className="flex rounded-xl border border-edge bg-surface p-1">
             {(

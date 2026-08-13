@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Diagnostics;
@@ -5,25 +6,39 @@ using PokemonVault.Data;
 using PokemonVault.Models;
 using PokemonVault.Services;
 
-// The content root has to be the binary's own folder, not the working
-// directory: a service starts in system32, and the exe can be launched from
-// anywhere, but wwwroot and appsettings always sit next to it.
+// Content root, which decides where wwwroot and appsettings are found.
 //
-// This must be set through WebApplicationOptions. Doing it afterwards via
-// builder.Host.UseContentRoot() throws at startup the moment the two paths
-// actually differ — "Changing the host configuration using
-// WebApplicationBuilder.Host is not supported" — which is exactly the case
-// this is meant to handle.
+// Published output puts wwwroot beside the binary, and a service starts with its
+// working directory in system32, so there it must be pinned to the binary's own
+// folder. A dev run is the opposite case: wwwroot lives in the project folder and
+// the SDK maps it from there, so pinning it to bin/Debug makes every page 404.
+// Detecting which layout we're in covers both.
+//
+// It also has to be set through WebApplicationOptions rather than
+// builder.Host.UseContentRoot() afterwards — that throws at startup the moment
+// the two paths actually differ, which is precisely the service case.
+var publishedContent = Path.Combine(AppContext.BaseDirectory, "wwwroot");
 var builder = WebApplication.CreateBuilder(new WebApplicationOptions
 {
     Args = args,
-    ContentRootPath = AppContext.BaseDirectory,
+    ContentRootPath = Directory.Exists(publishedContent) ? AppContext.BaseDirectory : null,
 });
 
 // Lets the same binary run as a Windows service, a systemd unit, or straight
 // from a terminal — both calls are no-ops when not started that way.
 builder.Host.UseWindowsService(o => o.ServiceName = "PokemonVault");
 builder.Host.UseSystemd();
+
+// App version, from <Version> in the csproj. Release builds append a source
+// stamp, which is what distinguishes two builds of the same version.
+var version = Assembly.GetExecutingAssembly()
+        .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
+    ?? Assembly.GetExecutingAssembly().GetName().Version?.ToString()
+    ?? "unknown";
+
+var buildDate = Assembly.GetExecutingAssembly()
+    .GetCustomAttributes<AssemblyMetadataAttribute>()
+    .FirstOrDefault(a => a.Key == "BuildDate")?.Value ?? "";
 
 builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: true);
 builder.Configuration.AddEnvironmentVariables();
@@ -54,6 +69,13 @@ builder.Services.AddSingleton<SetsService>();
 builder.Services.AddSingleton<SalesService>();
 builder.Services.AddSingleton<WantsService>();
 builder.Services.AddSingleton<AuthService>();
+builder.Services.AddHttpClient();
+builder.Services.AddSingleton(sp => new UpdateChecker(
+    sp.GetRequiredService<IHttpClientFactory>(),
+    sp.GetRequiredService<SettingsService>(),
+    sp.GetRequiredService<IConfiguration>(),
+    sp.GetRequiredService<ILogger<UpdateChecker>>(),
+    version));
 builder.Services.AddSingleton<ExportService>();
 builder.Services.AddHttpClient<CustomItemService>(c => c.Timeout = TimeSpan.FromSeconds(30));
 
@@ -66,6 +88,9 @@ builder.Services.ConfigureHttpJsonOptions(o =>
 builder.WebHost.UseUrls(builder.Configuration["Urls"] ?? "http://0.0.0.0:5188");
 
 var app = builder.Build();
+
+app.Logger.LogInformation("Pokémon Vault {Version}{Built} starting", version,
+    string.IsNullOrEmpty(buildDate) ? "" : $" (built {buildDate} UTC)");
 
 // Take a backup before anything else touches the data — this is the moment an
 // update would otherwise be able to do damage.
@@ -423,14 +448,49 @@ app.MapGet("/api/export/vault.json", (ExportService export) => Results.File(
 
 // ------------------------------------------------------- settings & data safety
 
-app.MapGet("/api/settings", (SettingsService settings, DataPaths paths, BackupService backups) => Results.Ok(new
+app.MapGet("/api/settings", async (
+    SettingsService settings, DataPaths paths, BackupService backups,
+    UpdateChecker updates, CancellationToken ct) =>
 {
-    apiKey = settings.GetApiKeyStatus(),
-    dataDirectory = paths.Root,
-    migratedFromLegacy = paths.MigratedFromLegacy,
-    legacyDirectory = paths.MigratedFrom ?? DataPaths.LegacyDirectory,
-    backups = backups.List(),
-}));
+    // Opening Settings is the natural moment to look. Internally rate limited to
+    // once a day, and a no-op unless you've turned it on.
+    await updates.MaybeCheckAsync(ct);
+
+    return Results.Ok(new
+    {
+        apiKey = settings.GetApiKeyStatus(),
+        dataDirectory = paths.Root,
+        migratedFromLegacy = paths.MigratedFromLegacy,
+        legacyDirectory = paths.MigratedFrom ?? DataPaths.LegacyDirectory,
+        backups = backups.List(),
+        version = updates.CurrentVersion,
+        buildDate,
+        update = new
+        {
+            enabled = updates.Enabled,
+            available = updates.UpdateAvailable,
+            latest = updates.LatestVersion,
+            releaseUrl = updates.ReleaseUrl,
+            lastCheckedUtc = updates.LastCheckedUtc,
+        },
+    });
+});
+
+app.MapPost("/api/settings/update-check", async (
+    ToggleRequest req, UpdateChecker updates, CancellationToken ct) =>
+{
+    updates.SetEnabled(req.Enabled);
+    await updates.MaybeCheckAsync(ct);
+
+    return Results.Ok(new
+    {
+        enabled = updates.Enabled,
+        available = updates.UpdateAvailable,
+        latest = updates.LatestVersion,
+        releaseUrl = updates.ReleaseUrl,
+        lastCheckedUtc = updates.LastCheckedUtc,
+    });
+});
 
 app.MapPut("/api/settings/api-key", async (
     ApiKeyRequest req, SettingsService settings, PokemonTcgClient api, CancellationToken ct) =>

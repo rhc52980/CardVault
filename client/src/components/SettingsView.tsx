@@ -36,11 +36,89 @@ export function SettingsView({ onAuthChanged }: { onAuthChanged: () => void }) {
 
   return (
     <div className="max-w-3xl space-y-5">
+      <VersionCard settings={settings} onChanged={load} />
       <SecurityCard onAuthChanged={onAuthChanged} />
       <ApiKeyCard settings={settings} onChanged={load} />
       <DataCard settings={settings} />
       <BackupsCard settings={settings} onChanged={load} />
     </div>
+  )
+}
+
+// ------------------------------------------------------------ version/updates
+
+function VersionCard({ settings, onChanged }: { settings: AppSettings; onChanged: () => void }) {
+  const [busy, setBusy] = useState(false)
+
+  // The source stamp after '+' identifies the exact build; the part before it is
+  // the release number people actually talk about.
+  const [release, stamp] = settings.version.split('+')
+
+  async function toggle(enabled: boolean) {
+    setBusy(true)
+    try {
+      await api.setUpdateCheck(enabled)
+      onChanged()
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <section className="panel rounded-xl p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="font-medium text-bright">Version</h2>
+          <p className="mt-1 text-sm">
+            <span className="font-mono text-bright">{release}</span>
+            {settings.buildDate && <span className="text-mute"> · built {settings.buildDate} UTC</span>}
+          </p>
+          {stamp && (
+            <p className="mt-0.5 font-mono text-[11px] text-mute" title="Source revision this build came from">
+              {stamp.slice(0, 12)}
+            </p>
+          )}
+        </div>
+
+        {settings.update.available && settings.update.releaseUrl && (
+          <a
+            href={settings.update.releaseUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="rounded-lg bg-gold/15 px-3 py-2 text-sm text-gold ring-1 ring-gold/30 transition hover:brightness-110"
+          >
+            {settings.update.latest} available ↗
+          </a>
+        )}
+      </div>
+
+      <label className="mt-3 flex items-start gap-2 text-sm text-mute">
+        <input
+          type="checkbox"
+          checked={settings.update.enabled}
+          disabled={busy}
+          onChange={(e) => toggle(e.target.checked)}
+          className="mt-0.5 h-4 w-4 accent-[color:var(--color-arc)]"
+        />
+        <span>
+          Check GitHub for new releases, once a day.
+          <span className="block text-xs">
+            Off by default — nothing leaves this machine unless you turn it on. It only reads;
+            nothing is downloaded or installed.
+            {settings.update.lastCheckedUtc && (
+              <> Last checked {new Date(settings.update.lastCheckedUtc).toLocaleString()}.</>
+            )}
+          </span>
+        </span>
+      </label>
+
+      <p className="mt-3 border-t border-edge pt-3 text-xs text-mute">
+        To update: pull the latest code and run{' '}
+        <code className="text-arc">install\Update-PokemonVault.bat</code> (or{' '}
+        <code className="text-arc">sudo ./linux/install.sh</code>). Your collection is outside the
+        app folder and is backed up automatically whenever the version changes.
+      </p>
+    </section>
   )
 }
 
