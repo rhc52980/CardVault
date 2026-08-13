@@ -5,6 +5,7 @@ import type { CollectionItem } from '../types'
 import { CardDetail } from './CardDetail'
 import { CardTile } from './CardTile'
 import { ManualEntryDialog } from './ManualEntryDialog'
+import { SoldView } from './SoldView'
 
 type SortKey = 'value' | 'name' | 'set' | 'added' | 'rarity'
 
@@ -35,6 +36,9 @@ export function CollectionView({
   const [sort, setSort] = useState<SortKey>('value')
   const [detailCardId, setDetailCardId] = useState<string | null>(null)
   const [manualOpen, setManualOpen] = useState(false)
+  // Owned and sold are two views of the same collection, so they share a screen
+  // rather than eating another slot in the top nav.
+  const [pane, setPane] = useState<'owned' | 'sold'>('owned')
 
   const sets = useMemo(() => {
     const seen = new Map<string, string>()
@@ -90,36 +94,102 @@ export function CollectionView({
     )
   }
 
+  // Owned/sold switch and export sit above everything, so sold history stays
+  // reachable even after you've sold the last card in your vault.
+  const header = (
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex rounded-lg border border-edge bg-surface p-1 text-sm">
+        {(
+          [
+            ['owned', 'Owned'],
+            ['sold', 'Sold'],
+          ] as const
+        ).map(([key, text]) => (
+          <button
+            key={key}
+            onClick={() => setPane(key)}
+            className={`rounded-md px-4 py-1.5 transition ${
+              pane === key ? 'bg-arc text-white' : 'text-mute hover:text-bright'
+            }`}
+          >
+            {text}
+          </button>
+        ))}
+      </div>
+
+      <div className="flex items-center gap-2 text-sm">
+        <span className="text-xs text-mute">Export</span>
+        <a
+          href="/api/export/collection.csv"
+          download
+          className="rounded-lg border border-edge px-3 py-2 text-mute transition hover:border-arc/60 hover:text-bright"
+          title="Spreadsheet-friendly, and can be imported straight back in"
+        >
+          Collection CSV
+        </a>
+        <a
+          href="/api/export/sales.csv"
+          download
+          className="rounded-lg border border-edge px-3 py-2 text-mute transition hover:border-arc/60 hover:text-bright"
+        >
+          Sales CSV
+        </a>
+        <a
+          href="/api/export/vault.json"
+          download
+          className="rounded-lg border border-edge px-3 py-2 text-mute transition hover:border-arc/60 hover:text-bright"
+          title="Everything, including hand-entered items and sales history"
+        >
+          JSON
+        </a>
+      </div>
+    </div>
+  )
+
+  if (pane === 'sold') {
+    return (
+      <div className="space-y-5">
+        {header}
+        <SoldView onChanged={onChanged} />
+      </div>
+    )
+  }
+
   if (items.length === 0) {
     return (
-      <div className="panel rounded-2xl px-6 py-20 text-center">
-        <p className="text-xl font-medium text-bright">Your vault is empty</p>
-        <p className="mx-auto mt-2 max-w-md text-sm text-mute">
-          Search the Pokémon TCG catalogue to add your first card. Artwork, set details and market
-          prices are pulled in automatically.
-        </p>
-        <div className="mt-6 flex flex-wrap justify-center gap-3">
-          <button
-            onClick={onGoToSearch}
-            className="rounded-lg bg-arc px-5 py-2.5 text-sm font-medium text-white transition hover:brightness-110"
-          >
-            Find your first card
-          </button>
-          <button
-            onClick={() => setManualOpen(true)}
-            className="rounded-lg border border-edge px-5 py-2.5 text-sm text-mute transition hover:text-bright"
-          >
-            Add sealed or graded by hand
-          </button>
-        </div>
+      <div className="space-y-5">
+        {header}
+        <div className="panel rounded-2xl px-6 py-20 text-center">
+          <p className="text-xl font-medium text-bright">Your vault is empty</p>
+          <p className="mx-auto mt-2 max-w-md text-sm text-mute">
+            Search the Pokémon TCG catalogue to add your first card. Artwork, set details and market
+            prices are pulled in automatically.
+          </p>
+          <div className="mt-6 flex flex-wrap justify-center gap-3">
+            <button
+              onClick={onGoToSearch}
+              className="rounded-lg bg-arc px-5 py-2.5 text-sm font-medium text-white transition hover:brightness-110"
+            >
+              Find your first card
+            </button>
+            <button
+              onClick={() => setManualOpen(true)}
+              className="rounded-lg border border-edge px-5 py-2.5 text-sm text-mute transition hover:text-bright"
+            >
+              Add sealed or graded by hand
+            </button>
+          </div>
 
-        {manualOpen && <ManualEntryDialog onClose={() => setManualOpen(false)} onAdded={onChanged} />}
+          {manualOpen && <ManualEntryDialog onClose={() => setManualOpen(false)} onAdded={onChanged} />}
+        </div>
       </div>
     )
   }
 
   return (
     <div className="space-y-5">
+      {header}
+
       <div className="flex flex-wrap items-center gap-3">
         <input
           value={filter}

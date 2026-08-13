@@ -118,6 +118,8 @@ public sealed class CollectionService(Db db)
             .OrderByDescending(x => x.Gain)
             .FirstOrDefault();
 
+        var (realised, proceeds, sold) = SalesTotals();
+
         return new CollectionStats(
             DistinctCards: items.Select(i => i.CardId).Distinct().Count(),
             TotalCards: items.Sum(i => i.Quantity),
@@ -126,7 +128,39 @@ public sealed class CollectionService(Db db)
             BiggestGainAmount: best.Name is null ? null : Math.Round(best.Gain, 2),
             BiggestGainCardName: best.Name,
             BySet: bySet,
-            ValueHistory: ValueHistory());
+            ValueHistory: ValueHistory(),
+            RealisedGain: realised,
+            SaleProceeds: proceeds,
+            CardsSold: sold);
+    }
+
+    /// <summary>
+    /// Sales totals, read straight from the table rather than through SalesService —
+    /// that service depends on this one, so calling back into it would be circular.
+    /// Fees apply to the sale as a whole, not per card.
+    /// </summary>
+    private (double Realised, double Proceeds, int Sold) SalesTotals()
+    {
+        using var conn = db.Open();
+        using var cmd = conn.CreateCommand();
+
+        // Proceeds and quantity count every sale. Profit only counts sales where the
+        // cost is known — without a purchase price, "profit" would just be the sale
+        // price and would overstate how well you'd done.
+        cmd.CommandText = """
+            SELECT
+                COALESCE(SUM(CASE WHEN purchase_price IS NOT NULL
+                                  THEN sale_price * quantity - COALESCE(fees, 0) - purchase_price * quantity
+                             END), 0) AS realised,
+                COALESCE(SUM(sale_price * quantity - COALESCE(fees, 0)), 0) AS proceeds,
+                COALESCE(SUM(quantity), 0) AS sold
+            FROM sales
+            """;
+
+        using var r = cmd.ExecuteReader();
+        if (!r.Read()) return (0, 0, 0);
+
+        return (Math.Round(r.GetDouble(0), 2), Math.Round(r.GetDouble(1), 2), r.GetInt32(2));
     }
 
     /// <summary>

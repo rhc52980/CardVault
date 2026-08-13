@@ -78,6 +78,40 @@ export interface CollectionStats {
   biggestGainCardName?: string | null
   bySet: SetBreakdown[]
   valueHistory: ValuePoint[]
+  /** Profit actually banked on cards sold, after fees. */
+  realisedGain: number
+  saleProceeds: number
+  cardsSold: number
+}
+
+export interface SellRequest {
+  quantity: number
+  salePrice: number
+  saleDate?: string | null
+  fees?: number | null
+  notes?: string | null
+}
+
+export interface SaleRecord {
+  id: number
+  cardId: string
+  cardName: string
+  setName?: string | null
+  number?: string | null
+  imageSmall?: string | null
+  quantity: number
+  variant?: string | null
+  condition?: string | null
+  grade?: string | null
+  purchasePrice?: number | null
+  salePrice: number
+  fees?: number | null
+  saleDate: string
+  notes?: string | null
+  recordedAt: string
+  /** Null when the purchase price was never recorded, so profit is unknowable. */
+  realisedGain?: number | null
+  proceeds: number
 }
 
 export interface AddEntryRequest {
