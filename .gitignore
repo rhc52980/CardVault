@@ -27,6 +27,15 @@ node_modules/
 client/dist/
 npm-debug.log*
 
+# A scratch copy of the brand artwork, dropped here when the logo is being
+# changed. The committed source of truth is brand/CardVault.png, which
+# tools/generate-icons.py reads — anything at the client root is a working copy.
+#
+# Ignored rather than deleted because it is otherwise picked up by `git add -A`,
+# which has already put a 1.8 MB duplicate into an unrelated commit once, and
+# because an untracked file makes tools/package.ps1 refuse to build a release.
+client/logo.png
+
 # OS
 Thumbs.db
 .DS_Store
