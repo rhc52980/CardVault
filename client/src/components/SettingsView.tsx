@@ -14,6 +14,7 @@ import {
   saveAppearance,
   type Appearance,
 } from '../lib/appearance'
+import { ConfirmButton } from './ConfirmButton'
 import { PriceRefreshButton } from './PriceRefreshButton'
 
 const field =
@@ -1020,13 +1021,12 @@ function BackupsCard({ settings, onChanged }: { settings: AppSettings; onChanged
               >
                 Download
               </a>
-              <button
-                onClick={() => remove(b.name)}
+              <ConfirmButton
+                onConfirm={() => remove(b.name)}
                 disabled={busy}
-                className="rounded-md px-2 py-1 text-xs text-mute transition hover:text-rose disabled:opacity-40"
-              >
-                Delete
-              </button>
+                label="Delete"
+                confirm="Delete backup"
+              />
             </div>
           ))
         )}

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { api, cardImage, money } from '../api'
 import { prettyVariant } from '../lib/cardStyles'
 import type { SaleRecord } from '../types'
+import { ConfirmButton } from './ConfirmButton'
 
 export function SoldView({ onChanged }: { onChanged: () => void }) {
   const [sales, setSales] = useState<SaleRecord[] | null>(null)
@@ -135,14 +136,13 @@ export function SoldView({ onChanged }: { onChanged: () => void }) {
               </div>
             </div>
 
-            <button
-              onClick={() => remove(s.id)}
+            <ConfirmButton
+              onConfirm={() => remove(s.id)}
               disabled={busy}
+              label="Delete"
+              confirm="Delete sale record"
               title="Removes this record only — it does not put the card back in your vault"
-              className="rounded-md px-2 py-1 text-xs text-mute transition hover:text-rose disabled:opacity-40"
-            >
-              Delete
-            </button>
+            />
           </div>
         ))}
       </div>
