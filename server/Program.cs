@@ -59,6 +59,9 @@ builder.Services.AddSingleton<CollectionService>();
 builder.Services.AddSingleton<SettingsService>();
 builder.Services.AddSingleton<BackupService>();
 
+// Startup alone can't keep a promise of daily backups on a server that stays up.
+builder.Services.AddHostedService<BackupScheduler>();
+
 builder.Services.AddHttpClient<PokemonTcgClient>(c => c.Timeout = TimeSpan.FromSeconds(30));
 
 builder.Services.AddHttpClient<ImageCache>(c => c.Timeout = TimeSpan.FromSeconds(30));
