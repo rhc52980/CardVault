@@ -19,4 +19,11 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "$sc.Description = 'CardVault - collection tracker';" ^
   "$sc.Save();" ^
   "Write-Host 'Desktop shortcut created.' -ForegroundColor Green"
+
+:: Windows caches shortcut icons by path. An update replaces cardvault.ico in
+:: place -- same path, new picture -- which is the one case the cache gets wrong,
+:: so the desktop keeps showing the old icon indefinitely. Rebuilding the cache
+:: here is the difference between the new artwork appearing and it appearing
+:: never.
+ie4uinit.exe -show
 pause

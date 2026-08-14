@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api } from './api'
+// Imported rather than referenced as /logo.png so Vite content-hashes the URL.
+// A fixed name in public/ let a cached copy of the old artwork survive several
+// releases, because nothing ever told the browser the picture had changed.
+import logoUrl from './assets/logo.png'
 import { CollectionView } from './components/CollectionView'
 import { ImportView } from './components/ImportView'
 import { LoginScreen } from './components/LoginScreen'
@@ -85,7 +89,7 @@ export default function App() {
         <header className="mb-6 flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <img
-              src="/logo.png"
+              src={logoUrl}
               alt=""
               width={40}
               height={40}

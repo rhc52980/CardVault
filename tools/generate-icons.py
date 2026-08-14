@@ -27,6 +27,15 @@ OUT = ROOT / "client" / "public"
 # Generated here so it can never drift from the brand art again.
 SHORTCUT_ICON = ROOT / "install" / "cardvault.ico"
 
+# The in-app logo goes into src/, not public/, so Vite fingerprints it into
+# /assets/logo-<hash>.png. That matters more than it looks: a file in public/
+# keeps its name forever, so a browser that cached the old artwork under
+# /logo.png had no reason to ever ask again — which is exactly what happened, and
+# left the header showing the previous logo across several releases. A
+# content-hashed URL changes when the picture changes, so the problem cannot
+# recur.
+APP_LOGO = ROOT / "client" / "src" / "assets" / "logo.png"
+
 # The app's near-black ground. iOS ignores transparency and composites on white,
 # so anything that must be opaque gets flattened onto this instead.
 GROUND = (6, 7, 12)
@@ -119,7 +128,8 @@ def main() -> None:
 
     # The logo used inside the app. 256 covers a 40px header mark even at 3x DPI,
     # and this one is on every page view so it gets the most attention to size.
-    compact(resized(art, 256)).save(OUT / "logo.png", optimize=True)
+    APP_LOGO.parent.mkdir(parents=True, exist_ok=True)
+    compact(resized(art, 256)).save(APP_LOGO, optimize=True)
 
     # The Windows shortcut icon. Carries a 256px entry as well as the small sizes,
     # because Explorer's large-icon views and the taskbar at high DPI ask for it —
@@ -129,10 +139,11 @@ def main() -> None:
         SHORTCUT_ICON, sizes=[(16, 16), (32, 32), (48, 48), (256, 256)]
     )
 
-    for name in ("icon-512.png", "icon-192.png", "apple-touch-icon.png", "favicon.ico", "logo.png"):
+    for name in ("icon-512.png", "icon-192.png", "apple-touch-icon.png", "favicon.ico"):
         print(f"  wrote {name}  ({(OUT / name).stat().st_size:,} bytes)")
 
-    print(f"  wrote {SHORTCUT_ICON.relative_to(ROOT)}  ({SHORTCUT_ICON.stat().st_size:,} bytes)")
+    for path in (APP_LOGO, SHORTCUT_ICON):
+        print(f"  wrote {path.relative_to(ROOT)}  ({path.stat().st_size:,} bytes)")
 
 
 if __name__ == "__main__":
