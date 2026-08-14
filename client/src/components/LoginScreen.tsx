@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import logoUrl from '../assets/logo.png'
 import { api } from '../api'
 import type { AuthStatus } from '../types'
 
@@ -29,7 +30,7 @@ export function LoginScreen({ status, onSignedIn }: { status: AuthStatus; onSign
       <div className="relative z-10 w-full max-w-sm">
         {/* Room to breathe here, so the full logo gets used rather than a mark. */}
         <div className="mb-6 text-center">
-          <img src="/logo.png" alt="Pokémon Card Vault" className="mx-auto h-32 w-32 drop-shadow-2xl" />
+          <img src={logoUrl} alt="CardVault" className="mx-auto h-32 w-32 drop-shadow-2xl" />
           <p className="mt-3 text-sm text-mute">Sign in to see your collection</p>
         </div>
 
