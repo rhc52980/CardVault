@@ -66,23 +66,39 @@ public sealed class PriceSnapshotService(
         {
             ct.ThrowIfCancellationRequested();
 
-            JsonElement? card;
-            try
+            if (CustomItemService.IsCustomId(id))
             {
-                card = await api.GetCardAsync(id, ct);
+                // Nothing to refresh from the catalogue — a custom item's payload is
+                // whatever we stored when it was created. It's still worth pricing:
+                // sources that go to a marketplace can put a live number on sealed
+                // product and slabs, which is the only way those ever get one.
+                var payload = cache.GetPayload(id);
+                if (payload is null) continue;
+
+                using var doc = JsonDocument.Parse(payload);
+                await RecordFromAllSourcesAsync(id, doc.RootElement, today, ct);
+                captured++;
             }
-            catch (Exception e)
+            else
             {
-                // One bad card shouldn't abandon the rest of the collection.
-                log.LogWarning(e, "Could not refresh prices for {CardId}", id);
-                continue;
+                JsonElement? card;
+                try
+                {
+                    card = await api.GetCardAsync(id, ct);
+                }
+                catch (Exception e)
+                {
+                    // One bad card shouldn't abandon the rest of the collection.
+                    log.LogWarning(e, "Could not refresh prices for {CardId}", id);
+                    continue;
+                }
+
+                if (card is null) continue;
+                cache.Upsert(card.Value);
+
+                await RecordFromAllSourcesAsync(id, card.Value, today, ct);
+                captured++;
             }
-
-            if (card is null) continue;
-            cache.Upsert(card.Value);
-
-            await RecordFromAllSourcesAsync(id, card.Value, today, ct);
-            captured++;
 
             // Gentle pacing so a large collection doesn't trip the rate limit.
             await Task.Delay(TimeSpan.FromMilliseconds(250), ct);
@@ -98,7 +114,7 @@ public sealed class PriceSnapshotService(
     /// this the first data point wouldn't appear until the next daily cycle, and a
     /// card added this morning would show an empty chart all day.
     /// </summary>
-    public void RecordCurrentPrices(string cardId)
+    public async Task RecordCurrentPricesAsync(string cardId, CancellationToken ct)
     {
         var payload = cache.GetPayload(cardId);
         if (payload is null) return;
@@ -106,11 +122,26 @@ public sealed class PriceSnapshotService(
         using var doc = JsonDocument.Parse(payload);
         var today = DateTime.UtcNow.ToString("yyyy-MM-dd");
 
-        // Sources that read the cached payload complete synchronously; this only
-        // blocks if a future source goes to the network, which the caller (adding
-        // a card) can afford.
-        RecordFromAllSourcesAsync(cardId, doc.RootElement, today, CancellationToken.None)
-            .GetAwaiter().GetResult();
+        await RecordFromAllSourcesAsync(cardId, doc.RootElement, today, ct);
+    }
+
+    /// <summary>
+    /// Blocking version, for the CSV import loop.
+    ///
+    /// Safe there and only there: import only ever adds catalogue cards, and every
+    /// source that can price one reads the cached payload and completes without
+    /// touching the network. A custom item would reach eBay and must not come
+    /// through here — <see cref="RecordCurrentPricesAsync"/> is the one to call.
+    /// </summary>
+    public void RecordCurrentPrices(string cardId)
+    {
+        if (CustomItemService.IsCustomId(cardId))
+        {
+            log.LogWarning("Custom item {CardId} routed through the blocking price seed; skipping", cardId);
+            return;
+        }
+
+        RecordCurrentPricesAsync(cardId, CancellationToken.None).GetAwaiter().GetResult();
     }
 
     /// <summary>
@@ -191,23 +222,23 @@ public sealed class PriceSnapshotService(
     /// <summary>
     /// Cards worth refreshing: everything you own, plus everything on the want list.
     /// A want with a target price is only useful if its market price is current.
+    ///
+    /// Custom items are included even though there's no catalogue entry behind them.
+    /// Whether any source can actually price one is left to <see cref="IPriceSource.CanPrice"/>:
+    /// the two catalogue sources decline them for want of a tcgplayer or cardmarket
+    /// block in the payload, and eBay picks them up. Filtering them out here, as this
+    /// used to, meant the marketplace source could never see the only items it exists
+    /// to price.
     /// </summary>
     private List<string> OwnedCardIds()
     {
         using var conn = db.Open();
         using var cmd = conn.CreateCommand();
-        // Custom items have no catalogue entry to refresh — their value is yours to set.
         cmd.CommandText = """
             SELECT DISTINCT card_id FROM (
-                SELECT c.card_id AS card_id
-                FROM collection c
-                JOIN cards k ON k.id = c.card_id
-                WHERE COALESCE(k.is_custom, 0) = 0
+                SELECT c.card_id AS card_id FROM collection c
                 UNION
-                SELECT w.card_id
-                FROM wants w
-                JOIN cards k2 ON k2.id = w.card_id
-                WHERE COALESCE(k2.is_custom, 0) = 0
+                SELECT w.card_id FROM wants w
             )
             """;
         var ids = new List<string>();

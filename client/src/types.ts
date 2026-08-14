@@ -262,6 +262,8 @@ export interface UpdateStatus {
 
 export interface AppSettings {
   apiKey: ApiKeyStatus
+  /** eBay credentials. Only the App ID is ever echoed back, and masked at that. */
+  ebay: ApiKeyStatus
   dataDirectory: string
   migratedFromLegacy: boolean
   legacyDirectory: string

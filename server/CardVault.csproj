@@ -26,6 +26,13 @@
     <Content Update="appsettings.Local.json" CopyToOutputDirectory="Never" CopyToPublishDirectory="Never" />
   </ItemGroup>
 
+  <!-- So the tests can reach helpers that shouldn't be public API — the price
+       statistics and query building, which are worth pinning down but have no
+       business being called from outside their own source. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="CardVault.Tests" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.11" />
     <PackageReference Include="Microsoft.Extensions.Hosting.Systemd" Version="10.0.11" />

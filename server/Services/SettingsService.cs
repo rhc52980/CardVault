@@ -4,6 +4,9 @@ namespace CardVault.Services;
 
 public sealed record ApiKeyStatus(bool Configured, string? Masked, string Source);
 
+/// <summary>eBay OAuth application credentials. Both halves or neither.</summary>
+public sealed record EbayCredentials(string ClientId, string ClientSecret);
+
 /// <summary>
 /// App settings, and in particular the pokemontcg.io API key.
 ///
@@ -16,6 +19,8 @@ public sealed class SettingsService(Db db, IConfiguration config)
 {
     private const string ApiKeySetting = "pokemontcg_api_key";
     private const string PreferredSourceSetting = "preferred_price_source";
+    private const string EbayClientIdSetting = "ebay_client_id";
+    private const string EbayClientSecretSetting = "ebay_client_secret";
 
     /// <summary>
     /// Which market drives valuation. One source, never a blend — they report
@@ -55,6 +60,53 @@ public sealed class SettingsService(Db db, IConfiguration config)
 
     /// <summary>Removes the saved key, falling back to config or environment if present.</summary>
     public void ClearApiKey() => Delete(ApiKeySetting);
+
+    /// <summary>
+    /// eBay credentials, or null if either half is missing.
+    ///
+    /// Returning null rather than a half-filled pair means the price source has one
+    /// thing to check: without both values there is no point attempting OAuth, and a
+    /// source that quietly does nothing is better than one that fails every cycle.
+    /// </summary>
+    public EbayCredentials? GetEbayCredentials()
+    {
+        var id = Get(EbayClientIdSetting) ?? config["Ebay:ClientId"] ?? config["EBAY_CLIENT_ID"];
+        var secret = Get(EbayClientSecretSetting) ?? config["Ebay:ClientSecret"] ?? config["EBAY_CLIENT_SECRET"];
+
+        return string.IsNullOrWhiteSpace(id) || string.IsNullOrWhiteSpace(secret)
+            ? null
+            : new EbayCredentials(id.Trim(), secret.Trim());
+    }
+
+    /// <summary>
+    /// What to show on the settings screen. Only the client id is ever echoed back,
+    /// masked — the secret's presence is reported but its characters never leave the
+    /// server, since anyone reaching an unprotected instance could otherwise lift a
+    /// credential that bills against your eBay account.
+    /// </summary>
+    public ApiKeyStatus GetEbayStatus()
+    {
+        var storedId = Get(EbayClientIdSetting);
+        var storedSecret = Get(EbayClientSecretSetting);
+        if (!string.IsNullOrWhiteSpace(storedId) && !string.IsNullOrWhiteSpace(storedSecret))
+            return new ApiKeyStatus(true, Mask(storedId), "Saved in this app");
+
+        return GetEbayCredentials() is { } fromConfig
+            ? new ApiKeyStatus(true, Mask(fromConfig.ClientId), "appsettings.Local.json or environment")
+            : new ApiKeyStatus(false, null, "Not set");
+    }
+
+    public void SetEbayCredentials(string clientId, string clientSecret)
+    {
+        Set(EbayClientIdSetting, clientId.Trim());
+        Set(EbayClientSecretSetting, clientSecret.Trim());
+    }
+
+    public void ClearEbayCredentials()
+    {
+        Delete(EbayClientIdSetting);
+        Delete(EbayClientSecretSetting);
+    }
 
     /// <summary>
     /// Only ever show the ends. The server has no authentication, so anyone who can
