@@ -264,6 +264,18 @@ export const api = {
     return fetch('/api/settings/ebay', { method: 'DELETE' }).then(json<{ ebay: ApiKeyStatus }>)
   },
 
+  saveScrydexCredentials(apiKey: string, teamId: string) {
+    return fetch('/api/settings/scrydex', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ apiKey, teamId }),
+    }).then(json<{ saved: boolean; reachable: boolean; scrydex?: ApiKeyStatus }>)
+  },
+
+  clearScrydexCredentials() {
+    return fetch('/api/settings/scrydex', { method: 'DELETE' }).then(json<{ scrydex: ApiKeyStatus }>)
+  },
+
   setUpdateCheck(enabled: boolean) {
     return post<UpdateStatus>('/api/settings/update-check', { enabled })
   },
