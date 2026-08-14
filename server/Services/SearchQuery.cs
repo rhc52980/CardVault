@@ -1,6 +1,37 @@
+using System.Text;
 using System.Text.RegularExpressions;
 
 namespace CardVault.Services;
+
+/// <summary>
+/// What someone meant by what they typed, before it's aimed at anything.
+///
+/// Parsing and rendering are separate because the same box now feeds two very
+/// different things: a pokemontcg.io query string, and SQL against the offline
+/// catalogue. Working out that "056/094" is a collector number is the hard part and
+/// there should only ever be one copy of it.
+/// </summary>
+/// <param name="Raw">
+/// Set when the input used the API's own field syntax, which is passed through
+/// untouched. The catalogue can't honour arbitrary API fields, so this is also the
+/// signal that a query can't be served locally.
+/// </param>
+public sealed record SearchIntent(
+    string? Name,
+    string? Number,
+    int? PrintedTotal,
+    string? SetId,
+    string? Raw)
+{
+    /// <summary>True when there's nothing to search for at all.</summary>
+    public bool IsEmpty => Name is null && Number is null && PrintedTotal is null && SetId is null && Raw is null;
+
+    /// <summary>
+    /// Whether the offline catalogue can answer this. Raw API syntax can't be
+    /// translated field-for-field, so those queries stay with the API.
+    /// </summary>
+    public bool CanRunLocally => Raw is null && !IsEmpty;
+}
 
 /// <summary>
 /// Turns what someone typed into a pokemontcg.io query.
@@ -10,9 +41,9 @@ namespace CardVault.Services;
 /// as part of a card's *name* — which is what a naive wildcard search does — is
 /// almost never what was meant.
 ///
-/// The denominator does most of the work. It's the set's printed total, and the
-/// API can filter on it directly, so "4/102" narrows 20,000-odd cards to about two
-/// without needing to know which set that is.
+/// The denominator does most of the work. It's the set's printed total, and both
+/// the API and the offline catalogue can filter on it directly, so "4/102" narrows
+/// 20,000-odd cards to about two without needing to know which set that is.
 /// </summary>
 public static partial class SearchQuery
 {
@@ -33,63 +64,121 @@ public static partial class SearchQuery
         RegexOptions.CultureInvariant)]
     private static partial Regex NumberOverTotal();
 
-    public static string? Build(string? input, string? setId)
+    /// <summary>Works out what was meant. Rendering it is someone else's job.</summary>
+    public static SearchIntent Parse(string? input, string? setId)
     {
-        var parts = new List<string>();
         var text = input?.Trim() ?? "";
+        var set = string.IsNullOrWhiteSpace(setId) ? null : Clean(setId);
 
-        if (text.Length > 0)
-        {
-            // Anything with a colon is the API's own syntax — pass it through so
-            // power users keep full access to fields we don't special-case.
-            if (text.Contains(':')) parts.Add(text);
-            else parts.AddRange(Interpret(text));
-        }
+        if (text.Length == 0) return new SearchIntent(null, null, null, set, null);
 
-        if (!string.IsNullOrWhiteSpace(setId)) parts.Add($"set.id:{Clean(setId)}");
+        // Anything with a colon is the API's own syntax — pass it through so power
+        // users keep full access to fields we don't special-case.
+        if (text.Contains(':')) return new SearchIntent(null, null, null, set, text);
 
-        return parts.Count == 0 ? null : string.Join(" ", parts);
-    }
-
-    private static IEnumerable<string> Interpret(string text)
-    {
         // "4/102" — number plus the set's printed total.
         if (NumberOverTotal().Match(text) is { Success: true } slash)
-            return FromNumberAndTotal(slash.Groups["num"].Value, slash.Groups["total"].Value);
+        {
+            var (number, total) = NumberAndTotal(slash);
+            return new SearchIntent(null, number, total, set, null);
+        }
 
         // "4", "056", "TG12" — a bare collector number.
         if (CollectorNumber().IsMatch(text))
-            return [$"number:{Number(text)}"];
+            return new SearchIntent(null, Number(text), null, set, null);
 
         // "charizard 4" or "charizard 4/102" — a name with a number after it.
         var lastSpace = text.LastIndexOf(' ');
         if (lastSpace > 0)
         {
-            var head = text[..lastSpace].Trim();
+            var head = Clean(text[..lastSpace]);
             var tail = text[(lastSpace + 1)..].Trim();
 
             if (NumberOverTotal().Match(tail) is { Success: true } tailSlash)
-                return [Name(head), .. FromNumberAndTotal(tailSlash.Groups["num"].Value, tailSlash.Groups["total"].Value)];
+            {
+                var (number, total) = NumberAndTotal(tailSlash);
+                return new SearchIntent(head, number, total, set, null);
+            }
 
             if (CollectorNumber().IsMatch(tail))
-                return [Name(head), $"number:{Number(tail)}"];
+                return new SearchIntent(head, Number(tail), null, set, null);
         }
 
-        return [Name(text)];
+        return new SearchIntent(Clean(text), null, null, set, null);
     }
 
-    private static IEnumerable<string> FromNumberAndTotal(string number, string total)
+    /// <summary>The pokemontcg.io form.</summary>
+    public static string? Build(string? input, string? setId)
     {
-        yield return $"number:{Number(number)}";
+        var intent = Parse(input, setId);
+        var parts = new List<string>();
 
-        // Only numeric totals map to set.printedTotal. Some modern subsets print a
-        // non-numeric denominator ("SV49/SV94"), which this field can't match.
-        // Normalised for the same reason as the numerator: printedTotal is a number,
-        // and "094" only matches today because the API happens to coerce it.
-        if (total.All(char.IsDigit)) yield return $"set.printedTotal:{Number(total)}";
+        if (intent.Raw is { } raw) parts.Add(raw);
+        else if (intent.Name is { } name) parts.Add($"name:\"*{name}*\"");
+
+        if (intent.Number is { } number) parts.Add($"number:{number}");
+        if (intent.PrintedTotal is { } total) parts.Add($"set.printedTotal:{total}");
+        if (intent.SetId is { } set) parts.Add($"set.id:{set}");
+
+        return parts.Count == 0 ? null : string.Join(" ", parts);
     }
 
-    private static string Name(string value) => $"name:\"*{Clean(value)}*\"";
+    /// <summary>
+    /// The same intent as a WHERE clause over the offline catalogue, with its
+    /// parameters. Names match on substring, the way the API's wildcard search does,
+    /// so the two paths return the same cards for the same typing.
+    ///
+    /// Returns null for a query the catalogue can't answer, which is the caller's
+    /// cue to fall back to the API rather than to return nothing.
+    /// </summary>
+    public static (string Where, Dictionary<string, object> Parameters)? ToSql(SearchIntent intent)
+    {
+        if (!intent.CanRunLocally) return null;
+
+        var clauses = new List<string>();
+        var parameters = new Dictionary<string, object>();
+
+        if (intent.Name is { } name)
+        {
+            // LIKE is case-insensitive for ASCII in SQLite by default, which matches
+            // how the API treats a name search.
+            clauses.Add(@"name LIKE $name ESCAPE '\'");
+            parameters["$name"] = $"%{Escape(name)}%";
+        }
+
+        if (intent.Number is { } number)
+        {
+            // Stored as printed, so "4" must not also match "14" or "40".
+            clauses.Add("number = $number COLLATE NOCASE");
+            parameters["$number"] = number;
+        }
+
+        if (intent.PrintedTotal is { } total)
+        {
+            clauses.Add("printed_total = $printedTotal");
+            parameters["$printedTotal"] = total;
+        }
+
+        if (intent.SetId is { } set)
+        {
+            clauses.Add("set_id = $setId COLLATE NOCASE");
+            parameters["$setId"] = set;
+        }
+
+        return clauses.Count == 0 ? null : (string.Join(" AND ", clauses), parameters);
+    }
+
+    private static (string Number, int? Total) NumberAndTotal(Match match)
+    {
+        var number = Number(match.Groups["num"].Value);
+        var totalText = match.Groups["total"].Value;
+
+        // Only numeric totals map to a printed total. Some modern subsets print a
+        // non-numeric denominator ("SV49/SV94"), which nothing can filter on.
+        return totalText.All(char.IsAsciiDigit) && int.TryParse(totalText, out var total)
+            ? (number, total)
+            : (number, null);
+    }
 
     /// <summary>
     /// A collector number as the catalogue stores it, which is not always how the
@@ -117,4 +206,19 @@ public static partial class SearchQuery
     /// <summary>Strips characters that would break out of the query's own syntax.</summary>
     private static string Clean(string value)
         => value.Replace("\"", "").Replace("\\", "").Replace("(", "").Replace(")", "").Trim();
+
+    /// <summary>
+    /// Neutralises LIKE's own wildcards so a card name containing % or _ searches
+    /// for those characters rather than matching everything.
+    /// </summary>
+    private static string Escape(string value)
+    {
+        var sb = new StringBuilder(value.Length);
+        foreach (var c in value)
+        {
+            if (c is '%' or '_' or '\\') sb.Append('\\');
+            sb.Append(c);
+        }
+        return sb.ToString();
+    }
 }

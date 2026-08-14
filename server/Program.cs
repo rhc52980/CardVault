@@ -92,6 +92,10 @@ builder.Services.AddSingleton(sp => new UpdateChecker(
     sp.GetRequiredService<ILogger<UpdateChecker>>(),
     version));
 builder.Services.AddSingleton<ExportService>();
+
+// The optional offline catalogue. Singleton because a download runs in the
+// background and its progress has to survive between polls.
+builder.Services.AddSingleton<CatalogueService>();
 builder.Services.AddHttpClient<CustomItemService>(c => c.Timeout = TimeSpan.FromSeconds(30));
 
 // Serialize enums as names so the UI reads "Ambiguous" rather than 1.
@@ -197,6 +201,7 @@ app.MapGet("/api/search", async (
     CardCache cache,
     CollectionService collection,
     WantsService wants,
+    CatalogueService catalogue,
     CancellationToken ct,
     string? q = null,
     string? set = null,
@@ -206,6 +211,29 @@ app.MapGet("/api/search", async (
     int page = 1,
     int pageSize = 24) =>
 {
+    var intent = SearchQuery.Parse(q, set);
+
+    // The offline catalogue answers first when it's switched on and can express the
+    // query. This is the whole point of it: pokemontcg.io averages ten seconds on the
+    // searches that succeed and fails most of the rest, and that lands exactly when
+    // you're stood there with a card in your hand.
+    if (catalogue.IsUsable && intent.CanRunLocally)
+    {
+        var found = catalogue.Search(intent, Math.Clamp(pageSize is 0 ? 24 : pageSize, 1, 100));
+        var ownedLocal = collection.List()
+            .GroupBy(i => i.CardId)
+            .ToDictionary(g => g.Key, g => g.Sum(i => i.Quantity));
+        var wantedLocal = wants.WantedIds();
+
+        return Results.Ok(new
+        {
+            data = found.Select(c => SummarizeCatalogue(c, ownedLocal, wantedLocal)).ToList(),
+            totalCount = found.Count,
+            page = 1,
+            source = "catalogue",
+        });
+    }
+
     var query = SearchQuery.Build(q, set);
     if (query is null) return Results.Ok(new { data = Array.Empty<object>(), totalCount = 0, page = 1 });
 
@@ -284,6 +312,7 @@ app.MapGet("/api/collection/stats", (CollectionService collection) => Results.Ok
 app.MapPost("/api/collection", async (
     AddEntryRequest req,
     CollectionService collection,
+    CatalogueService catalogue,
     CardCache cache,
     PokemonTcgClient api,
     PriceSnapshotService snapshots,
@@ -294,9 +323,22 @@ app.MapPost("/api/collection", async (
     // The card must exist locally before we can join against it for prices.
     if (!cache.Has(req.CardId))
     {
-        var fetched = await api.GetCardAsync(req.CardId, ct);
-        if (fetched is null) return Results.NotFound(new { error = $"Unknown card '{req.CardId}'" });
-        cache.Upsert(fetched.Value);
+        // The offline catalogue first when it's available. Adding a card is the one
+        // moment that has to be instant and cannot be allowed to fail on a 502, so
+        // this deliberately does not call the API even to "enrich" the record — the
+        // daily refresh already re-fetches every owned card and will fill in the real
+        // printings and prices on its next run.
+        var seeded = catalogue.IsUsable ? catalogue.BuildPayload(req.CardId) : null;
+        if (seeded is not null)
+        {
+            cache.Upsert(seeded.Value);
+        }
+        else
+        {
+            var fetched = await api.GetCardAsync(req.CardId, ct);
+            if (fetched is null) return Results.NotFound(new { error = $"Unknown card '{req.CardId}'" });
+            cache.Upsert(fetched.Value);
+        }
     }
 
     var id = collection.Add(req);
@@ -572,6 +614,36 @@ app.MapDelete("/api/settings/ebay", (SettingsService settings) =>
     return Results.Ok(new { ebay = settings.GetEbayStatus() });
 });
 
+// ------------------------------------------------------------ offline catalogue
+
+app.MapGet("/api/catalogue", (CatalogueService catalogue) => Results.Ok(catalogue.Status()));
+
+app.MapPost("/api/catalogue/download", (CatalogueDownloadRequest? req, CatalogueService catalogue) =>
+{
+    if (!catalogue.Start(req?.IncludeImages ?? true))
+        return Results.Conflict(new { error = "A download is already running." });
+
+    return Results.Accepted("/api/catalogue", catalogue.Status());
+});
+
+app.MapPost("/api/catalogue/cancel", (CatalogueService catalogue) =>
+{
+    catalogue.Cancel();
+    return Results.Ok(catalogue.Status());
+});
+
+app.MapPut("/api/catalogue/enabled", (ToggleRequest req, CatalogueService catalogue) =>
+{
+    catalogue.SetEnabled(req.Enabled);
+    return Results.Ok(catalogue.Status());
+});
+
+app.MapDelete("/api/catalogue", (CatalogueService catalogue) =>
+{
+    catalogue.Delete();
+    return Results.Ok(catalogue.Status());
+});
+
 app.MapPost("/api/backups", (BackupService backups) => Results.Ok(backups.Create("manual")));
 
 app.MapGet("/api/backups/{name}", (string name, BackupService backups) =>
@@ -692,8 +764,16 @@ app.MapGet("/api/import/template", () =>
 // ---------------------------------------------------------------- card images
 
 app.MapGet("/img/{cardId}/{size}", async (
-    string cardId, string size, ImageCache images, CancellationToken ct) =>
+    string cardId, string size, ImageCache images, CatalogueService catalogue, CancellationToken ct) =>
 {
+    // The offline catalogue first, and only for thumbnails — it stores one WebP per
+    // card, which is the size the grid actually draws. Serving it here is what makes
+    // browsing search results touch the network for neither data nor artwork. A large
+    // image still goes through the on-demand cache, so opening one card fetches one
+    // file rather than the catalogue having to carry every detail scan.
+    if (size != "large" && catalogue.ImageFile(cardId) is { } local)
+        return Results.File(local, "image/webp", enableRangeProcessing: true);
+
     var path = await images.GetLocalPathAsync(cardId, size, ct);
     if (path is null) return Results.NotFound();
     return Results.File(path, "image/png", enableRangeProcessing: true);
@@ -725,6 +805,42 @@ static void IssueSessionCookie(HttpContext ctx, AuthService auth)
 }
 
 static string ClientKey(HttpContext ctx) => ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+
+/// <summary>
+/// The same shape as <see cref="Summarize"/>, for a card that came from the offline
+/// catalogue instead of the API.
+///
+/// Prices are null and that is deliberate — the catalogue has none to give, and
+/// inventing one from a stale figure would be worse than showing nothing. Printings
+/// are a guess from rarity and era for the same reason; the daily refresh replaces
+/// them with the real list once the card is owned.
+/// </summary>
+static object SummarizeCatalogue(
+    CatalogueCard card, IReadOnlyDictionary<string, int> owned, IReadOnlySet<string> wanted) => new
+{
+    id = card.Id,
+    name = card.Name,
+    number = card.Number,
+    rarity = card.Rarity,
+    supertype = card.Supertype,
+    hp = (string?)null,
+    artist = card.Artist,
+    types = card.Types,
+    subtypes = Array.Empty<string>(),
+    setId = card.SetId,
+    setName = card.SetName,
+    setSeries = card.SetSeries,
+    releaseDate = card.ReleaseDate,
+    imageSmall = card.HasImage ? $"/img/{card.Id}/small" : null,
+    imageLarge = (string?)null,
+    marketPrice = (double?)null,
+    lowPrice = (double?)null,
+    highPrice = (double?)null,
+    variants = Pricing.LikelyVariants(card.Rarity, card.ReleaseDate),
+    pricesUpdatedAt = (string?)null,
+    ownedQuantity = owned.TryGetValue(card.Id, out var n) ? n : 0,
+    isWanted = wanted.Contains(card.Id),
+};
 
 static object Summarize(JsonElement card, IReadOnlyDictionary<string, int> owned, IReadOnlySet<string> wanted)
 {

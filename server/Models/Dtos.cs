@@ -130,6 +130,49 @@ public sealed record ApiKeyRequest(string? ApiKey);
 /// <summary>eBay application credentials, entered together since neither works alone.</summary>
 public sealed record EbayCredentialsRequest(string? ClientId, string? ClientSecret);
 
+/// <summary>
+/// A card from the offline catalogue. No price field, and that is not an oversight:
+/// the source data carries no prices at all, and this exists to find a card rather
+/// than to value one.
+/// </summary>
+public sealed record CatalogueCard(
+    string Id,
+    string Name,
+    string? SetId,
+    string? SetName,
+    string? SetSeries,
+    string? Number,
+    int? PrintedTotal,
+    string? Rarity,
+    string? Supertype,
+    string[] Types,
+    string? Artist,
+    string? ReleaseDate,
+    /// <summary>Whether the artwork was downloaded, so the UI knows to expect one.</summary>
+    bool HasImage);
+
+/// <summary>
+/// How a running download is getting on. <see cref="State"/> is "sets", "images",
+/// "done", "failed" or "cancelled".
+/// </summary>
+public sealed record CatalogueProgress(
+    string State,
+    int Done,
+    int Total,
+    string? Detail,
+    string? Error);
+
+public sealed record CatalogueStatus(
+    bool Enabled,
+    int Cards,
+    int Images,
+    long ImageBytes,
+    string? DownloadedAt,
+    CatalogueProgress? Progress);
+
+/// <summary>Whether to pull artwork too, which is the slow and large part.</summary>
+public sealed record CatalogueDownloadRequest(bool IncludeImages = true);
+
 public sealed record ToggleRequest(bool Enabled);
 
 public sealed record PasswordRequest(string? Password);
