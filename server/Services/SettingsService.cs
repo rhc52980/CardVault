@@ -15,6 +15,18 @@ public sealed record ApiKeyStatus(bool Configured, string? Masked, string Source
 public sealed class SettingsService(Db db, IConfiguration config)
 {
     private const string ApiKeySetting = "pokemontcg_api_key";
+    private const string PreferredSourceSetting = "preferred_price_source";
+
+    /// <summary>
+    /// Which market drives valuation. One source, never a blend — they report
+    /// different currencies, so averaging or summing across them would produce a
+    /// number that means nothing.
+    /// </summary>
+    public string PreferredPriceSource
+    {
+        get => Get(PreferredSourceSetting) is { Length: > 0 } s ? s : "tcgplayer";
+        set => Set(PreferredSourceSetting, value);
+    }
 
     /// <summary>The key to use right now, or null if none is configured anywhere.</summary>
     public string? GetApiKey()

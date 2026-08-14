@@ -16,6 +16,7 @@ import type {
   SellRequest,
   SessionInfo,
   SetCard,
+  PriceSourceSettings,
   SetSummary,
   UpdateEntryRequest,
   UpdateStatus,
@@ -181,6 +182,19 @@ export const api = {
   async deleteSale(id: number) {
     const res = await fetch(`/api/sales/${id}`, { method: 'DELETE' })
     if (!res.ok) throw new Error('Could not delete that sale record')
+  },
+
+  priceSources() {
+    return fetch('/api/prices/sources').then(json<PriceSourceSettings>)
+  },
+
+  async setPreferredPriceSource(source: string) {
+    const res = await fetch('/api/prices/sources/preferred', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source }),
+    })
+    if (!res.ok) throw new Error(await res.text())
   },
 
   authStatus() {
