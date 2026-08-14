@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api'
-import type { AppSettings, AuthStatus, SessionInfo } from '../types'
+import type { AppSettings, AuthStatus, PriceSourceSettings, SessionInfo } from '../types'
 
 const field =
   'w-full rounded-lg border border-edge bg-abyss px-3 py-2 text-sm text-bright outline-none focus:border-arc focus:ring-1 focus:ring-arc'
@@ -37,11 +37,77 @@ export function SettingsView({ onAuthChanged }: { onAuthChanged: () => void }) {
   return (
     <div className="max-w-3xl space-y-5">
       <VersionCard settings={settings} onChanged={load} />
+      <PriceSourcesCard />
       <SecurityCard onAuthChanged={onAuthChanged} />
       <ApiKeyCard settings={settings} onChanged={load} />
       <DataCard settings={settings} />
       <BackupsCard settings={settings} onChanged={load} />
     </div>
+  )
+}
+
+// ------------------------------------------------------------- price sources
+
+function PriceSourcesCard() {
+  const [state, setState] = useState<PriceSourceSettings | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  const load = () => api.priceSources().then(setState).catch(() => {})
+
+  useEffect(() => {
+    void load()
+  }, [])
+
+  async function choose(id: string) {
+    setBusy(true)
+    try {
+      await api.setPreferredPriceSource(id)
+      await load()
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (!state) return <div className="skeleton h-32 rounded-xl" />
+
+  return (
+    <section className="panel rounded-xl p-4">
+      <h2 className="font-medium text-bright">Price sources</h2>
+      <p className="mt-1 text-sm text-mute">
+        All of these are recorded daily, so a card's chart can show them side by side. One drives
+        what your collection is said to be worth.
+      </p>
+
+      <div className="mt-3 space-y-2">
+        {state.sources.map((s) => (
+          <label
+            key={s.id}
+            className={`flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-sm ring-1 transition ${
+              s.id === state.preferred
+                ? 'bg-arc/10 text-bright ring-arc/40'
+                : 'bg-white/[0.03] text-mute ring-transparent hover:text-bright'
+            }`}
+          >
+            <input
+              type="radio"
+              name="price-source"
+              checked={s.id === state.preferred}
+              disabled={busy}
+              onChange={() => choose(s.id)}
+              className="h-4 w-4 accent-[color:var(--color-arc)]"
+            />
+            <span className="flex-1">{s.name}</span>
+            <span className="font-mono text-xs text-mute">{s.currency}</span>
+          </label>
+        ))}
+      </div>
+
+      <p className="mt-3 text-xs text-mute">
+        Values are never blended. These are separate markets quoting different currencies, so an
+        average across them would mean nothing — the chosen source is used as-is, and your own
+        valuation on an entry still overrides it.
+      </p>
+    </section>
   )
 }
 

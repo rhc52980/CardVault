@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { api, money } from '../api'
+import { api } from '../api'
 import { prettyVariant } from '../lib/cardStyles'
 import type { CardHistory, PriceSeries } from '../types'
 
@@ -22,8 +22,29 @@ const HEIGHT = 230
 
 interface Plotted {
   variant: string
+  source: string
+  label: string
+  currency: string
   color: string
   points: { date: string; market: number; x: number; y: number }[]
+}
+
+/**
+ * A series is a printing from a market, so neither alone identifies it — the same
+ * printing can appear once per source.
+ */
+const seriesKey = (s: { variant: string; source: string }) => `${s.source}:${s.variant}`
+
+/** Only names the market when more than one is present, to avoid noise. */
+function seriesLabel(s: PriceSeries, multipleSources: boolean) {
+  const variant = prettyVariant(s.variant)
+  return multipleSources ? `${variant} · ${s.sourceName}` : variant
+}
+
+/** Currency-aware, because these series are not all in dollars. */
+function amount(value: number | null | undefined, currency: string) {
+  if (value === null || value === undefined) return '—'
+  return value.toLocaleString(undefined, { style: 'currency', currency })
 }
 
 export function PriceChart({ cardId, ownedVariants }: { cardId: string; ownedVariants?: string[] }) {
@@ -31,6 +52,7 @@ export function PriceChart({ cardId, ownedVariants }: { cardId: string; ownedVar
   const [error, setError] = useState<string | null>(null)
   const [width, setWidth] = useState(560)
   const [hoverIndex, setHoverIndex] = useState<number | null>(null)
+  const [currency, setCurrency] = useState<string | null>(null)
   const [showTable, setShowTable] = useState(false)
   const wrapRef = useRef<HTMLDivElement>(null)
 
@@ -55,14 +77,32 @@ export function PriceChart({ cardId, ownedVariants }: { cardId: string; ownedVar
     return () => ro.disconnect()
   }, [])
 
+  // Currencies present across the sources that priced this card.
+  const currencies = useMemo(
+    () => [...new Set((history?.series ?? []).map((s) => s.currency))].sort(),
+    [history],
+  )
+
+  // One currency on the chart at a time. A dollar line and a euro line share no
+  // scale, so drawing them on one axis would invite a comparison that isn't
+  // meaningful — they're separate markets, not a cheaper and dearer version of
+  // the same one.
+  const activeCurrency = currency ?? currencies[0] ?? 'USD'
+
   // Owned printings lead, so the line you care about is the first colour.
   const chosen: PriceSeries[] = useMemo(() => {
     if (!history) return []
     const owned = new Set(ownedVariants ?? history.ownedVariants)
-    return [...history.series]
+    return history.series
+      .filter((s) => s.currency === activeCurrency)
       .sort((a, b) => Number(owned.has(b.variant)) - Number(owned.has(a.variant)))
       .slice(0, MAX_SERIES)
-  }, [history, ownedVariants])
+  }, [history, ownedVariants, activeCurrency])
+
+  const multipleSources = useMemo(
+    () => new Set(chosen.map((s) => s.source)).size > 1,
+    [chosen],
+  )
 
   // Every date across the chosen series, so the crosshair can snap to a column.
   const dates = useMemo(
@@ -95,6 +135,9 @@ export function PriceChart({ cardId, ownedVariants }: { cardId: string; ownedVar
 
     const plotted: Plotted[] = chosen.map((s, i) => ({
       variant: s.variant,
+      source: s.source,
+      label: seriesLabel(s, new Set(chosen.map((x) => x.source)).size > 1),
+      currency: s.currency,
       color: SERIES_COLORS[i],
       points: s.points.map((p) => ({ ...p, x: xFor(p.date), y: yFor(p.market) })),
     }))
@@ -117,9 +160,11 @@ export function PriceChart({ cardId, ownedVariants }: { cardId: string; ownedVar
       <div className="rounded-xl border border-edge bg-abyss/60 px-4 py-8 text-center">
         {only ? (
           <>
-            <div className="text-2xl font-semibold text-bright">{money(only.market)}</div>
+            <div className="text-2xl font-semibold text-bright">
+              {amount(only.market, chosen[0].currency)}
+            </div>
             <p className="mt-1 text-xs text-mute">
-              Today's price for {prettyVariant(chosen[0].variant)} — the first reading.
+              Today's price for {seriesLabel(chosen[0], true)} — the first reading.
             </p>
             <p className="mx-auto mt-3 max-w-sm text-xs text-mute">
               A line needs at least two days. The app records prices once a day, so this
@@ -153,7 +198,9 @@ export function PriceChart({ cardId, ownedVariants }: { cardId: string; ownedVar
         width={width}
         height={HEIGHT}
         role="img"
-        aria-label={`Market price over time for ${chosen.map((s) => prettyVariant(s.variant)).join(', ')}`}
+        aria-label={`Market price over time in ${activeCurrency} for ${chosen
+          .map((s) => seriesLabel(s, multipleSources))
+          .join(', ')}`}
         onPointerMove={handleMove}
         onPointerLeave={() => setHoverIndex(null)}
         className="touch-none"
@@ -177,7 +224,7 @@ export function PriceChart({ cardId, ownedVariants }: { cardId: string; ownedVar
               className="fill-mute"
               style={{ fontSize: 11, fontVariantNumeric: 'tabular-nums' }}
             >
-              {compactMoney(t)}
+              {compactMoney(t, activeCurrency)}
             </text>
           </g>
         ))}
@@ -211,7 +258,7 @@ export function PriceChart({ cardId, ownedVariants }: { cardId: string; ownedVar
         )}
 
         {g.plotted.map((s) => (
-          <g key={s.variant}>
+          <g key={seriesKey(s)}>
             <polyline
               points={s.points.map((p) => `${p.x},${p.y}`).join(' ')}
               fill="none"
@@ -264,10 +311,10 @@ export function PriceChart({ cardId, ownedVariants }: { cardId: string; ownedVar
             const p = s.points.find((q) => q.date === hoverDate)
             if (!p) return null
             return (
-              <div key={s.variant} className="mt-1 flex items-center gap-2">
+              <div key={seriesKey(s)} className="mt-1 flex items-center gap-2">
                 <span style={{ background: s.color }} className="h-0.5 w-3 rounded-full" />
-                <span className="text-sm font-medium tabular-nums text-bright">{money(p.market)}</span>
-                <span className="text-[11px] text-mute">{prettyVariant(s.variant)}</span>
+                <span className="text-sm font-medium tabular-nums text-bright">{amount(p.market, s.currency)}</span>
+                <span className="text-[11px] text-mute">{s.label}</span>
               </div>
             )
           })}
@@ -278,26 +325,48 @@ export function PriceChart({ cardId, ownedVariants }: { cardId: string; ownedVar
       {g.plotted.length > 1 && (
         <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1">
           {g.plotted.map((s) => (
-            <span key={s.variant} className="flex items-center gap-2 text-xs text-mute">
+            <span key={seriesKey(s)} className="flex items-center gap-2 text-xs text-mute">
               <span style={{ background: s.color }} className="h-0.5 w-4 rounded-full" />
-              {prettyVariant(s.variant)}
+              {s.label}
             </span>
           ))}
         </div>
       )}
 
-      <div className="mt-2 flex items-center justify-between">
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
         <p className="text-xs text-mute">
           {dates.length} {dates.length === 1 ? 'day' : 'days'} recorded
-          {history.series.length > MAX_SERIES &&
-            ` · showing ${MAX_SERIES} of ${history.series.length} printings`}
+          {chosen.length < history.series.filter((s) => s.currency === activeCurrency).length &&
+            ` · showing ${chosen.length} of ${
+              history.series.filter((s) => s.currency === activeCurrency).length
+            } series`}
         </p>
-        <button
-          onClick={() => setShowTable((v) => !v)}
-          className="text-xs text-arc transition hover:underline"
-        >
-          {showTable ? 'Hide table' : 'Show table'}
-        </button>
+
+        <div className="flex items-center gap-3">
+          {/* Only offered when a card really is priced in more than one currency.
+              Switching rather than overlaying, so the axis stays meaningful. */}
+          {currencies.length > 1 && (
+            <div className="flex rounded-md border border-edge bg-abyss p-0.5 text-[11px]">
+              {currencies.map((c) => (
+                <button
+                  key={c}
+                  onClick={() => setCurrency(c)}
+                  className={`rounded px-2 py-0.5 transition ${
+                    c === activeCurrency ? 'bg-arc text-white' : 'text-mute hover:text-bright'
+                  }`}
+                >
+                  {c}
+                </button>
+              ))}
+            </div>
+          )}
+          <button
+            onClick={() => setShowTable((v) => !v)}
+            className="text-xs text-arc transition hover:underline"
+          >
+            {showTable ? 'Hide table' : 'Show table'}
+          </button>
+        </div>
       </div>
 
       {/* Every value the tooltip shows is reachable without hovering. */}
@@ -308,8 +377,8 @@ export function PriceChart({ cardId, ownedVariants }: { cardId: string; ownedVar
               <tr className="text-left text-mute">
                 <th className="px-3 py-1.5 font-normal">Date</th>
                 {g.plotted.map((s) => (
-                  <th key={s.variant} className="px-3 py-1.5 text-right font-normal">
-                    {prettyVariant(s.variant)}
+                  <th key={seriesKey(s)} className="px-3 py-1.5 text-right font-normal">
+                    {s.label}
                   </th>
                 ))}
               </tr>
@@ -321,8 +390,8 @@ export function PriceChart({ cardId, ownedVariants }: { cardId: string; ownedVar
                   {g.plotted.map((s) => {
                     const p = s.points.find((q) => q.date === d)
                     return (
-                      <td key={s.variant} className="px-3 py-1.5 text-right tabular-nums text-bright">
-                        {p ? money(p.market) : '—'}
+                      <td key={seriesKey(s)} className="px-3 py-1.5 text-right tabular-nums text-bright">
+                        {p ? amount(p.market, s.currency) : "—"}
                       </td>
                     )
                   })}
@@ -352,9 +421,11 @@ function niceTicks(min: number, max: number, count: number): number[] {
   return ticks
 }
 
-function compactMoney(v: number) {
-  if (v >= 1000) return `$${(v / 1000).toFixed(v >= 10000 ? 0 : 1)}k`
-  return `$${v.toFixed(v < 10 ? 2 : 0)}`
+/** Axis ticks: short, and in the currency actually being plotted. */
+function compactMoney(v: number, currency: string) {
+  const symbol = currency === 'EUR' ? '€' : currency === 'GBP' ? '£' : '$'
+  if (v >= 1000) return `${symbol}${(v / 1000).toFixed(v >= 10000 ? 0 : 1)}k`
+  return `${symbol}${v.toFixed(v < 10 ? 2 : 0)}`
 }
 
 function shortDate(iso: string) {
