@@ -21,6 +21,12 @@ ROOT = Path(__file__).resolve().parent.parent
 SOURCE = ROOT / "brand" / "CardVault.png"
 OUT = ROOT / "client" / "public"
 
+# The Windows shortcut icon. Not part of the web app, which is exactly why it was
+# missed the first time the artwork changed: it lives in install/, the installer
+# copies it next to the exe, and Install-DesktopIcon.bat points the shortcut at it.
+# Generated here so it can never drift from the brand art again.
+SHORTCUT_ICON = ROOT / "install" / "cardvault.ico"
+
 # The app's near-black ground. iOS ignores transparency and composites on white,
 # so anything that must be opaque gets flattened onto this instead.
 GROUND = (6, 7, 12)
@@ -115,8 +121,18 @@ def main() -> None:
     # and this one is on every page view so it gets the most attention to size.
     compact(resized(art, 256)).save(OUT / "logo.png", optimize=True)
 
+    # The Windows shortcut icon. Carries a 256px entry as well as the small sizes,
+    # because Explorer's large-icon views and the taskbar at high DPI ask for it —
+    # a favicon-sized .ico looks visibly soft there.
+    SHORTCUT_ICON.parent.mkdir(parents=True, exist_ok=True)
+    compact(resized(art, 256)).save(
+        SHORTCUT_ICON, sizes=[(16, 16), (32, 32), (48, 48), (256, 256)]
+    )
+
     for name in ("icon-512.png", "icon-192.png", "apple-touch-icon.png", "favicon.ico", "logo.png"):
         print(f"  wrote {name}  ({(OUT / name).stat().st_size:,} bytes)")
+
+    print(f"  wrote {SHORTCUT_ICON.relative_to(ROOT)}  ({SHORTCUT_ICON.stat().st_size:,} bytes)")
 
 
 if __name__ == "__main__":
