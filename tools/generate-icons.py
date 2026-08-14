@@ -14,8 +14,9 @@ Run from the repo root:  python tools/generate-icons.py
 Requires Pillow.
 """
 
+import math
 from pathlib import Path
-from PIL import Image
+from PIL import Image, ImageDraw
 
 ROOT = Path(__file__).resolve().parent.parent
 SOURCE = ROOT / "brand" / "CardVault.png"
@@ -42,10 +43,27 @@ GROUND = (6, 7, 12)
 
 
 def load() -> Image.Image:
+    """
+    The artwork as a rounded badge with nothing behind it.
+
+    The source is a flat RGB image: the badge is drawn on solid black with no
+    alpha at all, so using it directly gave every icon a black square with the
+    rounded badge floating inside it. Wherever the platform then rounded the
+    icon itself — Windows, iOS, a browser tab — you saw the corners of that
+    square rather than the corners of the artwork.
+
+    So the surround is measured and removed, and the badge's own rounding is
+    reapplied as alpha. Both are derived from the image rather than hardcoded,
+    so replacing the artwork doesn't quietly leave the numbers wrong.
+    """
     img = Image.open(SOURCE).convert("RGBA")
 
-    # Trim any fully transparent border so the artwork fills the icon square
-    # rather than sitting inside invisible padding.
+    # An artwork that already carries transparency is trusted as-is; only a flat
+    # one needs the surround cutting away.
+    alpha = img.getchannel("A")
+    if alpha.getextrema() == (255, 255):
+        img = _cut_surround(img)
+
     bbox = img.getchannel("A").getbbox()
     if bbox:
         img = img.crop(bbox)
@@ -55,6 +73,51 @@ def load() -> Image.Image:
     square = Image.new("RGBA", (side, side), (0, 0, 0, 0))
     square.paste(img, ((side - img.width) // 2, (side - img.height) // 2))
     return square
+
+
+def _cut_surround(img: Image.Image) -> Image.Image:
+    """Crops to the badge and rounds its corners, returning it on transparency."""
+    grey = img.convert("L")
+    w, h = grey.size
+    px = grey.load()
+
+    # The corner pixel is the surround by definition. A small margin above it
+    # separates the background from the artwork's own darkest areas.
+    threshold = px[0, 0] + 24
+
+    mask = grey.point(lambda v: 255 if v > threshold else 0)
+    box = mask.getbbox()
+    if not box:
+        return img
+
+    badge = img.crop(box)
+    side = min(badge.size)
+
+    # Corner radius, read off the badge itself. For a circle of radius r centred
+    # at (r, r), a horizontal inset i measured d pixels below the top satisfies
+    # r = (i + d) + sqrt(2·i·d). Measuring rather than assuming means new artwork
+    # with different rounding still comes out right.
+    depth = max(2, side // 400)
+    row = [x for x in range(badge.width) if px[box[0] + x, box[1] + depth] > threshold]
+    radius = side // 5
+    if row:
+        inset = row[0]
+        if 0 < inset < side // 2:
+            radius = int(round((inset + depth) + math.sqrt(2 * inset * depth)))
+    radius = max(0, min(radius, side // 2))
+
+    # Drawn at 4x and scaled down, because ImageDraw has no anti-aliasing of its
+    # own and a hard-edged mask leaves visibly jagged corners.
+    scale = 4
+    big = Image.new("L", (badge.width * scale, badge.height * scale), 0)
+    ImageDraw.Draw(big).rounded_rectangle(
+        (0, 0, big.width - 1, big.height - 1), radius=radius * scale, fill=255
+    )
+    rounded = big.resize(badge.size, Image.LANCZOS)
+
+    out = badge.copy()
+    out.putalpha(rounded)
+    return out
 
 
 def resized(img: Image.Image, size: int) -> Image.Image:
@@ -123,20 +186,22 @@ def main() -> None:
     # both. If tab-strip recognition ever matters more than the wordmark, swap
     # this for focal(art) to use the pokéball dial instead.
     compact(resized(art, 256)).save(
-        OUT / "favicon.ico", sizes=[(16, 16), (32, 32), (48, 48)]
+        OUT / "favicon.ico", sizes=[(16, 16), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)]
     )
 
-    # The logo used inside the app. 256 covers a 40px header mark even at 3x DPI,
-    # and this one is on every page view so it gets the most attention to size.
+    # The logo used inside the app. 512 rather than 256: it is drawn at 128px on
+    # the login screen, which a 256px source only just covers at 2x DPI and not at
+    # all at 3x. The file is bundled and content-hashed, so it is fetched once and
+    # cached forever, which makes the extra kilobytes cheap.
     APP_LOGO.parent.mkdir(parents=True, exist_ok=True)
-    compact(resized(art, 256)).save(APP_LOGO, optimize=True)
+    compact(resized(art, 512)).save(APP_LOGO, optimize=True)
 
     # The Windows shortcut icon. Carries a 256px entry as well as the small sizes,
     # because Explorer's large-icon views and the taskbar at high DPI ask for it —
     # a favicon-sized .ico looks visibly soft there.
     SHORTCUT_ICON.parent.mkdir(parents=True, exist_ok=True)
     compact(resized(art, 256)).save(
-        SHORTCUT_ICON, sizes=[(16, 16), (32, 32), (48, 48), (256, 256)]
+        SHORTCUT_ICON, sizes=[(16, 16), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)]
     )
 
     for name in ("icon-512.png", "icon-192.png", "apple-touch-icon.png", "favicon.ico"):
