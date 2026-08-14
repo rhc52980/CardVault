@@ -204,6 +204,8 @@ export interface AddEntryRequest {
 export interface UpdateEntryRequest extends Partial<Omit<AddEntryRequest, 'cardId'>> {
   /** Removes a manual value so the entry tracks market price again. */
   clearManualValue?: boolean
+  /** Forgets what was paid. A null price means "leave alone", so this is the undo. */
+  clearPurchasePrice?: boolean
 }
 
 export interface CustomItemRequest {
