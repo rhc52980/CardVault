@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { cardImage, money } from '../api'
 import { rarityClass } from '../lib/cardStyles'
 import type { CollectionItem } from '../types'
@@ -42,6 +42,32 @@ export function CollectionView({
   const [pane, setPane] = useState<'owned' | 'wanted' | 'sold'>('owned')
   const [locationFilter, setLocationFilter] = useState('')
 
+  /**
+   * Whether hand-entered things share the grid with the cards.
+   *
+   * Sealed boxes, slabs and one-off promos are a different kind of object from a
+   * card — you browse them for different reasons, and a handful of them scattered
+   * through hundreds of singles is mostly noise. Cards-only is the default for
+   * that reason; the choice is remembered, because it is a preference rather than
+   * something to re-pick on every visit.
+   */
+  const [kind, setKind] = useState<'cards' | 'hand' | 'all'>(
+    () => (localStorage.getItem('vault.kind') as 'cards' | 'hand' | 'all') ?? 'cards',
+  )
+
+  useEffect(() => {
+    localStorage.setItem('vault.kind', kind)
+  }, [kind])
+
+  const counts = useMemo(
+    () => ({
+      cards: items.filter((i) => !i.isCustom).length,
+      hand: items.filter((i) => i.isCustom).length,
+      all: items.length,
+    }),
+    [items],
+  )
+
   const sets = useMemo(() => {
     const seen = new Map<string, string>()
     for (const i of items) if (i.setId && i.setName) seen.set(i.setId, i.setName)
@@ -68,6 +94,9 @@ export function CollectionView({
       )
     }
 
+    if (kind === 'cards') out = out.filter((i) => !i.isCustom)
+    else if (kind === 'hand') out = out.filter((i) => i.isCustom)
+
     if (setFilter_) out = out.filter((i) => i.setId === setFilter_)
     if (locationFilter) {
       out =
@@ -93,7 +122,7 @@ export function CollectionView({
       }
     })
     return sorted
-  }, [items, filter, setFilter_, locationFilter, sort])
+  }, [items, filter, setFilter_, locationFilter, sort, kind])
 
   const ownedForDetail = detailCardId ? items.filter((i) => i.cardId === detailCardId) : []
   const visibleValue = visible.reduce((sum, i) => sum + (i.lineValue ?? 0), 0)
@@ -215,6 +244,36 @@ export function CollectionView({
       {header}
 
       <div className="flex flex-wrap items-center gap-3">
+        {/* Only worth showing once there is something hand-entered to separate
+            out — on a collection of pure singles it would be three buttons that
+            never change anything. */}
+        {counts.hand > 0 && (
+          <div className="flex shrink-0 items-center rounded-lg border border-edge p-0.5 text-sm">
+            {(
+              [
+                ['cards', 'Cards', counts.cards],
+                ['hand', 'Sealed & slabs', counts.hand],
+                ['all', 'All', counts.all],
+              ] as const
+            ).map(([key, text, n]) => (
+              <button
+                key={key}
+                onClick={() => setKind(key)}
+                title={
+                  key === 'hand'
+                    ? 'Sealed product, graded slabs and anything else entered by hand'
+                    : undefined
+                }
+                className={`rounded-md px-3 py-1.5 transition ${
+                  kind === key ? 'bg-arc text-white' : 'text-mute hover:text-bright'
+                }`}
+              >
+                {text} <span className="tabular-nums opacity-70">{n}</span>
+              </button>
+            ))}
+          </div>
+        )}
+
         <input
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
