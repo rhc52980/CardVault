@@ -30,7 +30,9 @@ public sealed record CardCandidate(
     string? Rarity,
     string? ImageSmall,
     double? MarketPrice,
-    IReadOnlyList<string> Variants);
+    IReadOnlyList<string> Variants,
+    /// <summary>The set's printed total, used to match a number written "45/094".</summary>
+    int? PrintedTotal = null);
 
 public sealed class ImportRow
 {
@@ -45,6 +47,15 @@ public sealed class ImportRow
     public string? SetId { get; set; }
     public string? SetCode { get; set; }
     public string? Number { get; set; }
+
+    /// <summary>
+    /// The denominator, when the number was written as it appears on the card —
+    /// "45/094". It nearly identifies the set on its own, which is the difference
+    /// between a column of numbers resolving outright and every row of it coming
+    /// back ambiguous because card 45 exists in almost every set ever printed.
+    /// </summary>
+    public int? PrintedTotal { get; set; }
+
     public string? Rarity { get; set; }
     public string? ImageSmall { get; set; }
     public double? MarketPrice { get; set; }
