@@ -16,6 +16,14 @@ public sealed class DataPaths
     public string ImagesDirectory => Path.Combine(Root, "images");
     public string BackupsDirectory => Path.Combine(Root, "backups");
 
+    /// <summary>
+    /// Artwork for the offline catalogue, kept apart from the on-demand image cache
+    /// so that deleting the catalogue is a matter of removing one folder and can't
+    /// take the images for cards you own with it. Created only if the catalogue is
+    /// actually downloaded — an unused feature shouldn't leave a folder behind.
+    /// </summary>
+    public string CatalogueImagesDirectory => Path.Combine(Root, "catalogue-images");
+
     /// <summary>Where data lived before it was moved out of the app folder.</summary>
     public static string LegacyDirectory => Path.Combine(AppContext.BaseDirectory, "data");
 

@@ -167,6 +167,42 @@ public sealed class Db
                 key   TEXT PRIMARY KEY,
                 value TEXT
             );
+
+            -- An optional offline copy of the whole card catalogue, downloaded from
+            -- the pokemon-tcg-data repository so that finding a card never waits on
+            -- pokemontcg.io. Deliberately its OWN table rather than rows in `cards`:
+            -- `cards` means "we hold a real payload for this", which the add path and
+            -- the price sources both rely on, and filling it with twenty thousand
+            -- priceless rows would quietly break both. Keeping them apart also makes
+            -- deleting the catalogue a DELETE of one table.
+            --
+            -- It carries no prices, and cannot: the source data has no price block in
+            -- it at all. That is the point — this speeds up identifying a card, and
+            -- has nothing to say about what one is worth.
+            CREATE TABLE IF NOT EXISTS catalogue (
+                id             TEXT PRIMARY KEY,
+                name           TEXT NOT NULL,
+                set_id         TEXT,
+                set_name       TEXT,
+                set_series     TEXT,
+                number         TEXT,
+                printed_total  INTEGER,
+                rarity         TEXT,
+                supertype      TEXT,
+                subtypes       TEXT,
+                types          TEXT,
+                artist         TEXT,
+                release_date   TEXT,
+                image_url      TEXT,
+                -- 1 once the artwork has been fetched and stored as WebP on disk.
+                has_image      INTEGER NOT NULL DEFAULT 0
+            );
+
+            -- Searching by name is the common case; the number pair is what you type
+            -- off the card itself, and both want an index at twenty thousand rows.
+            CREATE INDEX IF NOT EXISTS idx_catalogue_name   ON catalogue(name);
+            CREATE INDEX IF NOT EXISTS idx_catalogue_number ON catalogue(number);
+            CREATE INDEX IF NOT EXISTS idx_catalogue_set    ON catalogue(set_id);
             """;
         cmd.ExecuteNonQuery();
 
