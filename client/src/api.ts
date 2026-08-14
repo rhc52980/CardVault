@@ -7,6 +7,7 @@ import type {
   BackupInfo,
   CardHistory,
   CatalogueStatus,
+  PriceRefreshProgress,
   CollectionItem,
   CollectionStats,
   CustomItemRequest,
@@ -125,8 +126,13 @@ export const api = {
     if (!res.ok) throw new Error(`Could not delete entry ${id}`)
   },
 
-  snapshot() {
-    return fetch('/api/prices/snapshot', { method: 'POST' }).then(json<{ captured: number }>)
+  /** Starts a refresh; poll refreshProgress for how it's getting on. */
+  refreshPrices() {
+    return fetch('/api/prices/snapshot', { method: 'POST' }).then(json<PriceRefreshProgress>)
+  },
+
+  refreshProgress() {
+    return fetch('/api/prices/snapshot').then(json<PriceRefreshProgress>)
   },
 
   wants() {

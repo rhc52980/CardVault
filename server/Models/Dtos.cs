@@ -173,6 +173,20 @@ public sealed record CatalogueStatus(
 /// <summary>Whether to pull artwork too, which is the slow and large part.</summary>
 public sealed record CatalogueDownloadRequest(bool IncludeImages = true);
 
+/// <summary>
+/// A price refresh in flight. Refreshing a large collection is one API call per
+/// card with pacing between them, so it runs in the background and is polled rather
+/// than awaited — a request that sat open for several minutes would simply time out.
+/// </summary>
+public sealed record PriceRefreshProgress(
+    bool Running,
+    int Done,
+    int Total,
+    string? Detail,
+    string? Error,
+    /// <summary>When the last run ended, so the UI can say "done" rather than just stopping.</summary>
+    string? FinishedAt);
+
 public sealed record ToggleRequest(bool Enabled);
 
 public sealed record PasswordRequest(string? Password);
