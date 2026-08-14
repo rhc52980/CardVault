@@ -97,6 +97,69 @@ public class SearchQueryTests
         => Assert.Equal(expected, SearchQuery.Build(input, null));
 
     /// <summary>
+    /// The slash is the slowest key in the sequence, and typing the number off the
+    /// card is the quickest way to find it. A space or a hyphen means the same.
+    /// Nothing is lost: both sides have to look like collector numbers for this to
+    /// match at all, and a card name never does.
+    /// </summary>
+    [Theory]
+    [InlineData("056 094", "number:56 set.printedTotal:94")]
+    [InlineData("4 102", "number:4 set.printedTotal:102")]
+    [InlineData("056-094", "number:56 set.printedTotal:94")]
+    [InlineData("4 - 102", "number:4 set.printedTotal:102")]
+    public void A_space_or_hyphen_separates_the_pair_like_a_slash(string input, string expected)
+        => Assert.Equal(expected, SearchQuery.Build(input, null));
+
+    /// <summary>
+    /// Typed with no separator at all. Ambiguous in principle — "45094" could be
+    /// 45/094, 4/5094 or 450/94 — but a set total is a real quantity, so it must be
+    /// at least ten, and no card is numbered above its own total. That leaves one
+    /// reading standing for the shapes people actually type.
+    /// </summary>
+    [Theory]
+    [InlineData("45094", "number:45 set.printedTotal:94")]
+    [InlineData("045094", "number:45 set.printedTotal:94")]
+    [InlineData("4102", "number:4 set.printedTotal:102")]
+    [InlineData("56094", "number:56 set.printedTotal:94")]
+    [InlineData("189198", "number:189 set.printedTotal:198")]
+    public void A_run_of_digits_splits_into_number_and_total(string input, string expected)
+        => Assert.Equal(expected, SearchQuery.Build(input, null));
+
+    [Fact]
+    public void Where_two_readings_survive_the_three_digit_total_wins()
+        // "1264" is both 1/264 and 12/64. Modern sets are overwhelmingly
+        // three-digit, so that is the guess; type the slash for the other.
+        => Assert.Equal("number:1 set.printedTotal:264", SearchQuery.Build("1264", null));
+
+    [Theory]
+    [InlineData("4", "number:4")]
+    [InlineData("58", "number:58")]
+    [InlineData("102", "number:102")]
+    public void Short_numbers_are_never_split(string input, string expected)
+        // Splitting "102" into 1/02 would be actively wrong — it is a card number.
+        => Assert.Equal(expected, SearchQuery.Build(input, null));
+
+    [Fact]
+    public void A_run_that_cannot_be_a_pair_stays_a_number()
+        // 0045: every split leaves a card numbered zero, so it is just a number.
+        => Assert.Equal("number:45", SearchQuery.Build("0045", null));
+
+    [Fact]
+    public void A_name_followed_by_a_spaced_pair_still_splits_correctly()
+        // The trap the word-by-word split exists for: taken at the last space, this
+        // would be a card called "charizard 4" numbered 102.
+        => Assert.Equal(
+            "name:\"*charizard*\" number:4 set.printedTotal:102",
+            SearchQuery.Build("charizard 4 102", null));
+
+    [Fact]
+    public void A_two_word_name_with_one_number_is_not_read_as_a_pair()
+        // "valiant 89" cannot be a pair — "valiant" has no digits in it.
+        => Assert.Equal(
+            "name:\"*iron valiant*\" number:89",
+            SearchQuery.Build("iron valiant 89", null));
+
+    /// <summary>
     /// "Charizard V" and "Charizard ex" end in a word, not a number — the whole
     /// thing is the name.
     /// </summary>

@@ -70,16 +70,46 @@ export function SearchView({ onCollectionChanged }: { onCollectionChanged: () =>
             ref={inputRef}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Card name, or a number straight off the card — “charizard”, “4/102”, “charizard 4”"
-            className="w-full rounded-xl border border-edge bg-surface py-3.5 pr-4 pl-11 text-bright placeholder:text-mute/70 focus:border-arc focus:ring-1 focus:ring-arc focus:outline-none"
+            // Escape empties it without reaching for the mouse or holding backspace.
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                setQuery('')
+                setResults([])
+                setTotal(0)
+              }
+            }}
+            placeholder="Card name, or the number off the card — “charizard”, “045094”, “45 094”"
+            className="w-full rounded-xl border border-edge bg-surface py-3.5 pr-11 pl-11 text-bright placeholder:text-mute/70 focus:border-arc focus:ring-1 focus:ring-arc focus:outline-none"
           />
+          {query && (
+            <button
+              onClick={() => {
+                setQuery('')
+                setResults([])
+                setTotal(0)
+                inputRef.current?.focus()
+              }}
+              title="Clear (Esc)"
+              aria-label="Clear search"
+              className="absolute top-1/2 right-3 -translate-y-1/2 rounded-md px-2 py-0.5 text-mute transition hover:text-bright"
+            >
+              ✕
+            </button>
+          )}
         </div>
         <p className="mt-2 text-xs text-mute">
-          Type <code className="text-arc">4/102</code> exactly as printed on the card and the
-          denominator picks the set for you. <code className="text-arc">4</code> searches by number,{' '}
+          Type the number off the card and the denominator picks the set for you. Any of{' '}
+          <code className="text-arc">045/094</code>, <code className="text-arc">45/094</code>,{' '}
+          <code className="text-arc">45 094</code> or just <code className="text-arc">045094</code>{' '}
+          find the same card — separator optional, leading zeros optional.{' '}
+          <code className="text-arc">4</code> searches by number alone,{' '}
           <code className="text-arc">charizard 4</code> combines both, and anything with a colon is
           passed through as a raw query — e.g.{' '}
           <code className="text-arc">rarity:&quot;Rare Holo&quot; types:Fire</code>.
+        </p>
+        <p className="mt-1 text-xs text-mute">
+          The box empties itself once a card is added, so you can go straight into the next one.
+          Escape clears it too.
         </p>
       </div>
 
@@ -172,10 +202,16 @@ export function SearchView({ onCollectionChanged }: { onCollectionChanged: () =>
           onClose={() => setAdding(null)}
           onAdded={() => {
             onCollectionChanged()
-            // Reflect the new count on the tile without a full re-search.
-            setResults((rs) =>
-              rs.map((r) => (r.id === adding.id ? { ...r, ownedQuantity: r.ownedQuantity + 1 } : r)),
-            )
+
+            // Clear the box and put the cursor back in it. Working through a
+            // physical stack, the card just added is finished with — leaving its
+            // number sitting there means selecting it all before typing the next
+            // one, every single time.
+            setQuery('')
+            setResults([])
+            setTotal(0)
+            // After the dialog has closed, or it takes the focus straight back.
+            setTimeout(() => inputRef.current?.focus(), 0)
           }}
         />
       )}
