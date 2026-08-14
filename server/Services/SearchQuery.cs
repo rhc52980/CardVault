@@ -59,8 +59,18 @@ public static partial class SearchQuery
     [GeneratedRegex(@"^[A-Za-z]{0,4}\d+[A-Za-z]?$", RegexOptions.CultureInvariant)]
     private static partial Regex CollectorNumber();
 
-    /// <summary>"4/102", "SV49/SV94", "102 / 102" — number over set total.</summary>
-    [GeneratedRegex(@"^(?<num>[A-Za-z]{0,4}\d+[A-Za-z]?)\s*/\s*(?<total>[A-Za-z]{0,4}\d+[A-Za-z]?)$",
+    /// <summary>
+    /// "4/102", "SV49/SV94", "102 / 102" — number over set total.
+    ///
+    /// A space or a hyphen counts as the separator as well as a slash. Typing the
+    /// number off a card is the fastest way to find it, and the slash is the one
+    /// character in that sequence needing a deliberate reach — "056 094" is the
+    /// same three keystrokes plus a thumb. Nothing is lost by accepting it: both
+    /// sides have to look like collector numbers for this to match at all, and a
+    /// card name never does.
+    /// </summary>
+    [GeneratedRegex(
+        @"^(?<num>[A-Za-z]{0,4}\d+[A-Za-z]?)(?:\s*[/\-]\s*|\s+)(?<total>[A-Za-z]{0,4}\d+[A-Za-z]?)$",
         RegexOptions.CultureInvariant)]
     private static partial Regex NumberOverTotal();
 
@@ -83,25 +93,40 @@ public static partial class SearchQuery
             return new SearchIntent(null, number, total, set, null);
         }
 
+        // "45094" — the pair run together, with no separator at all.
+        if (SplitRunTogether(text) is var (runNumber, runTotal))
+            return new SearchIntent(null, runNumber, runTotal, set, null);
+
         // "4", "056", "TG12" — a bare collector number.
         if (CollectorNumber().IsMatch(text))
             return new SearchIntent(null, Number(text), null, set, null);
 
-        // "charizard 4" or "charizard 4/102" — a name with a number after it.
-        var lastSpace = text.LastIndexOf(' ');
-        if (lastSpace > 0)
+        // A name with a number after it. Taken word by word rather than by the last
+        // space, because now that a space can separate a number from its total,
+        // "charizard 4 102" has to mean the same as "charizard 4/102" — and
+        // splitting on the last space alone would read it as a card called
+        // "charizard 4", numbered 102.
+        var words = text.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (words.Length >= 2)
         {
-            var head = Clean(text[..lastSpace]);
-            var tail = text[(lastSpace + 1)..].Trim();
-
-            if (NumberOverTotal().Match(tail) is { Success: true } tailSlash)
+            // "charizard 4/102" — the pair is one word.
+            if (NumberOverTotal().Match(words[^1]) is { Success: true } tailPair)
             {
-                var (number, total) = NumberAndTotal(tailSlash);
-                return new SearchIntent(head, number, total, set, null);
+                var (number, total) = NumberAndTotal(tailPair);
+                return new SearchIntent(Clean(string.Join(' ', words[..^1])), number, total, set, null);
             }
 
-            if (CollectorNumber().IsMatch(tail))
-                return new SearchIntent(head, Number(tail), null, set, null);
+            // "charizard 4 102" — the pair is the last two words.
+            if (words.Length >= 3
+                && NumberOverTotal().Match($"{words[^2]} {words[^1]}") is { Success: true } splitPair)
+            {
+                var (number, total) = NumberAndTotal(splitPair);
+                return new SearchIntent(Clean(string.Join(' ', words[..^2])), number, total, set, null);
+            }
+
+            // "charizard 4" — just a number on the end.
+            if (CollectorNumber().IsMatch(words[^1]))
+                return new SearchIntent(Clean(string.Join(' ', words[..^1])), Number(words[^1]), null, set, null);
         }
 
         return new SearchIntent(Clean(text), null, null, set, null);
@@ -166,6 +191,45 @@ public static partial class SearchQuery
         }
 
         return clauses.Count == 0 ? null : (string.Join(" AND ", clauses), parameters);
+    }
+
+    /// <summary>
+    /// Splits a run of digits typed with no separator at all — "45094" meaning
+    /// 45/094 — or null when it can't be read that way.
+    ///
+    /// This is genuinely ambiguous in general: "45094" could be 45/094, 4/5094 or
+    /// 450/94. What settles it is that a printed set total is a real quantity, not
+    /// any number: it has to be at least ten, and a card's number cannot exceed the
+    /// total it is out of. That rules out every reading but one for the shapes
+    /// people actually type.
+    ///
+    /// Where two readings survive — "1264" is both 1/264 and 12/64 — the
+    /// three-digit total wins, because modern sets are overwhelmingly three-digit.
+    /// Type the slash when you mean the other one.
+    ///
+    /// Only lengths four to seven are considered. Below that it is an ordinary card
+    /// number, and splitting "102" would be actively wrong.
+    /// </summary>
+    private static (string Number, int Total)? SplitRunTogether(string text)
+    {
+        if (text.Length is < 4 or > 7 || !text.All(char.IsAsciiDigit)) return null;
+
+        foreach (var totalLength in (int[])[3, 2])
+        {
+            if (text.Length - totalLength < 1) continue;
+
+            if (!int.TryParse(text[..^totalLength], out var number)) continue;
+            if (!int.TryParse(text[^totalLength..], out var total)) continue;
+
+            // A card numbered zero doesn't exist, a set of fewer than ten cards is
+            // not a thing anyone is typing, and no card is numbered above its own
+            // total. Between them these leave one reading standing.
+            if (number < 1 || total < 10 || number > total) continue;
+
+            return (number.ToString(), total);
+        }
+
+        return null;
     }
 
     private static (string Number, int? Total) NumberAndTotal(Match match)
