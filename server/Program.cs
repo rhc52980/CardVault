@@ -68,6 +68,12 @@ builder.Services.AddHttpClient<ImageCache>(c => c.Timeout = TimeSpan.FromSeconds
 builder.Services.AddSingleton<IPriceSource, TcgPlayerPriceSource>();
 builder.Services.AddSingleton<IPriceSource, CardmarketPriceSource>();
 
+// eBay is a singleton so its OAuth token survives between calls; unlike the other
+// two it goes to the network and needs credentials, and it only prices the custom
+// items the catalogue knows nothing about.
+builder.Services.AddSingleton<EbayClient>();
+builder.Services.AddSingleton<IPriceSource, EbayPriceSource>();
+
 builder.Services.AddSingleton<PriceSnapshotService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<PriceSnapshotService>());
 builder.Services.AddSingleton<ImportService>();
@@ -293,7 +299,7 @@ app.MapPost("/api/collection", async (
     var id = collection.Add(req);
 
     // Seed today's price so the card's chart isn't empty until the next daily run.
-    snapshots.RecordCurrentPrices(req.CardId);
+    await snapshots.RecordCurrentPricesAsync(req.CardId, ct);
 
     return Results.Created($"/api/collection/{id}", new { id });
 });
@@ -407,7 +413,7 @@ app.MapPost("/api/wants", async (
     var id = wants.Add(req);
 
     // Start its price history now, same as owning it would.
-    snapshots.RecordCurrentPrices(req.CardId);
+    await snapshots.RecordCurrentPricesAsync(req.CardId, ct);
 
     return Results.Created($"/api/wants/{id}", new { id });
 });
@@ -462,6 +468,7 @@ app.MapGet("/api/settings", async (
     return Results.Ok(new
     {
         apiKey = settings.GetApiKeyStatus(),
+        ebay = settings.GetEbayStatus(),
         dataDirectory = paths.Root,
         migratedFromLegacy = paths.MigratedFromLegacy,
         legacyDirectory = paths.MigratedFrom ?? DataPaths.LegacyDirectory,
@@ -530,6 +537,38 @@ app.MapDelete("/api/settings/api-key", (SettingsService settings) =>
     return Results.Ok(new { apiKey = settings.GetApiKeyStatus() });
 });
 
+app.MapPut("/api/settings/ebay", async (
+    EbayCredentialsRequest req, SettingsService settings, EbayClient ebay, CancellationToken ct) =>
+{
+    var id = req.ClientId?.Trim();
+    var secret = req.ClientSecret?.Trim();
+
+    if (string.IsNullOrWhiteSpace(id) || string.IsNullOrWhiteSpace(secret))
+        return Results.BadRequest(new { error = "Both the App ID and the Cert ID are required." });
+
+    // Saved before testing, same as the pokemontcg key: the check needs the stored
+    // pair to run at all, and a working credential you typed correctly shouldn't be
+    // thrown away because eBay happened to be unreachable.
+    settings.SetEbayCredentials(id, secret);
+
+    // Unlike pokemontcg.io, eBay does tell us: bad credentials can't mint a token,
+    // so this is a real yes or no rather than "the service answered".
+    var reachable = await ebay.TestConnectionAsync(ct);
+
+    return Results.Ok(new
+    {
+        saved = true,
+        reachable,
+        ebay = settings.GetEbayStatus(),
+    });
+});
+
+app.MapDelete("/api/settings/ebay", (SettingsService settings) =>
+{
+    settings.ClearEbayCredentials();
+    return Results.Ok(new { ebay = settings.GetEbayStatus() });
+});
+
 app.MapPost("/api/backups", (BackupService backups) => Results.Ok(backups.Create("manual")));
 
 app.MapGet("/api/backups/{name}", (string name, BackupService backups) =>
@@ -545,7 +584,8 @@ app.MapDelete("/api/backups/{name}", (string name, BackupService backups)
 
 // ------------------------------------------- manual entry: sealed, slabs, oddities
 
-app.MapPost("/api/custom", async (HttpRequest request, CustomItemService custom, CancellationToken ct) =>
+app.MapPost("/api/custom", async (
+    HttpRequest request, CustomItemService custom, PriceSnapshotService snapshots, CancellationToken ct) =>
 {
     CustomItemRequest? req;
     Stream? image = null;
@@ -580,6 +620,12 @@ app.MapPost("/api/custom", async (HttpRequest request, CustomItemService custom,
         return Results.BadRequest(new { error = "A name is required." });
 
     var (cardId, entryId) = await custom.CreateAsync(req, image, ct);
+
+    // Ask eBay what this is going for straight away, the same courtesy a catalogue
+    // card gets. For sealed product and slabs this is the only price there'll ever
+    // be, so waiting a day for the first one is a poor first impression.
+    await snapshots.RecordCurrentPricesAsync(cardId, ct);
+
     return Results.Created($"/api/collection/{entryId}", new { cardId, entryId });
 });
 

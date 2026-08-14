@@ -245,6 +245,18 @@ export const api = {
     return fetch('/api/settings/api-key', { method: 'DELETE' }).then(json<{ apiKey: ApiKeyStatus }>)
   },
 
+  saveEbayCredentials(clientId: string, clientSecret: string) {
+    return fetch('/api/settings/ebay', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ clientId, clientSecret }),
+    }).then(json<{ saved: boolean; reachable: boolean; ebay?: ApiKeyStatus }>)
+  },
+
+  clearEbayCredentials() {
+    return fetch('/api/settings/ebay', { method: 'DELETE' }).then(json<{ ebay: ApiKeyStatus }>)
+  },
+
   setUpdateCheck(enabled: boolean) {
     return post<UpdateStatus>('/api/settings/update-check', { enabled })
   },

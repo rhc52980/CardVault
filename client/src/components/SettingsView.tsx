@@ -40,6 +40,7 @@ export function SettingsView({ onAuthChanged }: { onAuthChanged: () => void }) {
       <PriceSourcesCard />
       <SecurityCard onAuthChanged={onAuthChanged} />
       <ApiKeyCard settings={settings} onChanged={load} />
+      <EbayCard settings={settings} onChanged={load} />
       <DataCard settings={settings} />
       <BackupsCard settings={settings} onChanged={load} />
     </div>
@@ -479,6 +480,151 @@ function ApiKeyCard({ settings, onChanged }: { settings: AppSettings; onChanged:
       <p className="mt-2 text-xs text-mute">
         With no password set, anyone who can reach this server on your network can read your
         collection and change this setting.
+      </p>
+    </section>
+  )
+}
+
+// --------------------------------------------------------------------- eBay
+
+function EbayCard({ settings, onChanged }: { settings: AppSettings; onChanged: () => void }) {
+  const [clientId, setClientId] = useState('')
+  const [clientSecret, setClientSecret] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [message, setMessage] = useState<{ kind: 'ok' | 'warn' | 'error'; text: string } | null>(null)
+
+  const ready = clientId.trim() !== '' && clientSecret.trim() !== ''
+
+  async function save() {
+    if (!ready) return
+    setBusy(true)
+    setMessage(null)
+    try {
+      const res = await api.saveEbayCredentials(clientId.trim(), clientSecret.trim())
+      setClientId('')
+      setClientSecret('')
+      setMessage(
+        res.reachable
+          ? { kind: 'ok', text: 'Saved, and eBay accepted the credentials.' }
+          : {
+              kind: 'warn',
+              text: 'Saved, but eBay would not issue a token with them. Check you copied the ' +
+                'production keys rather than the sandbox pair.',
+            },
+      )
+      onChanged()
+    } catch (e) {
+      setMessage({ kind: 'error', text: e instanceof Error ? e.message : 'Could not save those credentials' })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function clear() {
+    setBusy(true)
+    setMessage(null)
+    try {
+      await api.clearEbayCredentials()
+      setMessage({ kind: 'ok', text: 'Saved credentials removed.' })
+      onChanged()
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const status = settings.ebay
+
+  return (
+    <section className="panel rounded-xl p-4">
+      <h2 className="font-medium text-bright">eBay pricing for sealed and slabs</h2>
+      <p className="mt-1 text-sm text-mute">
+        Sealed product and graded slabs aren't in the card catalogue, so they have no price of
+        their own. With eBay credentials the app searches live listings for each one daily and
+        records what it finds, giving them a tracked value and a chart like any other item.
+        Create an application at{' '}
+        <a
+          href="https://developer.ebay.com/my/keys"
+          target="_blank"
+          rel="noreferrer"
+          className="text-arc hover:underline"
+        >
+          developer.ebay.com
+        </a>{' '}
+        and paste the production App ID and Cert ID below.
+      </p>
+
+      <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg bg-white/[0.03] px-3 py-2 text-sm">
+        <span className={status.configured ? 'text-mint' : 'text-gold'}>
+          {status.configured ? '● Credentials configured' : '○ Not set'}
+        </span>
+        {status.masked && <code className="font-mono text-xs text-mute">{status.masked}</code>}
+        <span className="text-xs text-mute">· {status.source}</span>
+      </div>
+
+      <div className="mt-3 space-y-2">
+        <input
+          type="text"
+          value={clientId}
+          onChange={(e) => setClientId(e.target.value)}
+          placeholder="App ID (Client ID)"
+          className={`${field} w-full font-mono`}
+          autoComplete="off"
+        />
+        <input
+          type="password"
+          value={clientSecret}
+          onChange={(e) => setClientSecret(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && save()}
+          placeholder="Cert ID (Client Secret)"
+          className={`${field} w-full font-mono`}
+          autoComplete="off"
+        />
+      </div>
+
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button
+          onClick={save}
+          disabled={busy || !ready}
+          className="rounded-lg bg-arc px-4 py-2 text-sm font-medium text-white transition hover:brightness-110 disabled:opacity-40"
+        >
+          {busy ? 'Saving…' : 'Save credentials'}
+        </button>
+        {status.configured && status.source === 'Saved in this app' && (
+          <button
+            onClick={clear}
+            disabled={busy}
+            className="rounded-lg border border-edge px-4 py-2 text-sm text-mute transition hover:text-rose disabled:opacity-40"
+          >
+            Remove
+          </button>
+        )}
+      </div>
+
+      {message && (
+        <p
+          className={`mt-2 text-sm ${
+            message.kind === 'ok' ? 'text-mint' : message.kind === 'warn' ? 'text-gold' : 'text-rose'
+          }`}
+        >
+          {message.text}
+        </p>
+      )}
+
+      <p className="mt-3 text-xs text-mute">
+        <span className="text-gold">These are asking prices, not sold prices.</span> eBay retired
+        its public completed-listings feed, and the sold-data API that replaced it is closed to new
+        applicants. What you get here is the median of the cheaper live listings for the item —
+        a fair guide to what one is going for, but it will read high against what things actually
+        sell for, and it's labelled "eBay (asking)" everywhere it appears so it can't be mistaken
+        for a sold comp.
+      </p>
+      <p className="mt-2 text-xs text-mute">
+        Only custom items are priced this way. Ordinary cards already have TCGplayer and Cardmarket
+        figures, which are better data and cost no quota.
+      </p>
+      <p className="mt-2 text-xs text-mute">
+        A value you've typed in yourself still wins over anything fetched here — clear it on the
+        item to fall back to the tracked price.
       </p>
     </section>
   )
