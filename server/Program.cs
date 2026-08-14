@@ -519,6 +519,13 @@ app.MapGet("/api/export/vault.json", (ExportService export) => Results.File(
     System.Text.Encoding.UTF8.GetBytes(export.EverythingJson()), "application/json",
     $"card-vault-{DateTime.Now:yyyy-MM-dd}.json"));
 
+// The collection as something a deck can be built from — energy costs, evolution
+// lines, retreat and format legality, which the full export leaves out. ?format=
+// standard or expanded narrows it to what's legal there.
+app.MapGet("/api/export/deck-inventory.json", (ExportService export, string? format = null) => Results.File(
+    System.Text.Encoding.UTF8.GetBytes(export.DeckInventoryJson(format)), "application/json",
+    $"card-vault-deck-inventory-{DateTime.Now:yyyy-MM-dd}.json"));
+
 // ------------------------------------------------------- settings & data safety
 
 app.MapGet("/api/settings", async (
