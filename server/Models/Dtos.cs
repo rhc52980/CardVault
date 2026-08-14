@@ -127,6 +127,9 @@ public sealed record ValuePoint(string Date, double Value);
 
 public sealed record ApiKeyRequest(string? ApiKey);
 
+/// <summary>eBay application credentials, entered together since neither works alone.</summary>
+public sealed record EbayCredentialsRequest(string? ClientId, string? ClientSecret);
+
 public sealed record ToggleRequest(bool Enabled);
 
 public sealed record PasswordRequest(string? Password);

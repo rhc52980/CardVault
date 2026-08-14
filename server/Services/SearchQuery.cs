@@ -18,16 +18,18 @@ public static partial class SearchQuery
 {
     /// <summary>
     /// A collector number: optional short prefix, digits, optional suffix letter —
-    /// "4", "58", "TG12", "SV49", "H5".
+    /// "4", "58", "TG12", "SV49", "H5", "SWSH039".
     ///
-    /// The prefix is capped at three characters so real card names that happen to
-    /// end in a digit ("Porygon2") aren't mistaken for numbers.
+    /// The prefix is capped so real card names that happen to end in a digit
+    /// ("Porygon2") aren't mistaken for numbers. Four characters, not three: the
+    /// promo sets number their cards "SWSH039" and "HGSS01", and at three those
+    /// fell through to a name search that could never match them.
     /// </summary>
-    [GeneratedRegex(@"^[A-Za-z]{0,3}\d+[A-Za-z]?$", RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"^[A-Za-z]{0,4}\d+[A-Za-z]?$", RegexOptions.CultureInvariant)]
     private static partial Regex CollectorNumber();
 
     /// <summary>"4/102", "SV49/SV94", "102 / 102" — number over set total.</summary>
-    [GeneratedRegex(@"^(?<num>[A-Za-z]{0,3}\d+[A-Za-z]?)\s*/\s*(?<total>[A-Za-z]{0,3}\d+[A-Za-z]?)$",
+    [GeneratedRegex(@"^(?<num>[A-Za-z]{0,4}\d+[A-Za-z]?)\s*/\s*(?<total>[A-Za-z]{0,4}\d+[A-Za-z]?)$",
         RegexOptions.CultureInvariant)]
     private static partial Regex NumberOverTotal();
 
@@ -55,9 +57,9 @@ public static partial class SearchQuery
         if (NumberOverTotal().Match(text) is { Success: true } slash)
             return FromNumberAndTotal(slash.Groups["num"].Value, slash.Groups["total"].Value);
 
-        // "4", "TG12" — a bare collector number.
+        // "4", "056", "TG12" — a bare collector number.
         if (CollectorNumber().IsMatch(text))
-            return [$"number:{Clean(text)}"];
+            return [$"number:{Number(text)}"];
 
         // "charizard 4" or "charizard 4/102" — a name with a number after it.
         var lastSpace = text.LastIndexOf(' ');
@@ -70,7 +72,7 @@ public static partial class SearchQuery
                 return [Name(head), .. FromNumberAndTotal(tailSlash.Groups["num"].Value, tailSlash.Groups["total"].Value)];
 
             if (CollectorNumber().IsMatch(tail))
-                return [Name(head), $"number:{Clean(tail)}"];
+                return [Name(head), $"number:{Number(tail)}"];
         }
 
         return [Name(text)];
@@ -78,14 +80,39 @@ public static partial class SearchQuery
 
     private static IEnumerable<string> FromNumberAndTotal(string number, string total)
     {
-        yield return $"number:{Clean(number)}";
+        yield return $"number:{Number(number)}";
 
         // Only numeric totals map to set.printedTotal. Some modern subsets print a
         // non-numeric denominator ("SV49/SV94"), which this field can't match.
-        if (total.All(char.IsDigit)) yield return $"set.printedTotal:{total}";
+        // Normalised for the same reason as the numerator: printedTotal is a number,
+        // and "094" only matches today because the API happens to coerce it.
+        if (total.All(char.IsDigit)) yield return $"set.printedTotal:{Number(total)}";
     }
 
     private static string Name(string value) => $"name:\"*{Clean(value)}*\"";
+
+    /// <summary>
+    /// A collector number as the catalogue stores it, which is not always how the
+    /// card prints it.
+    ///
+    /// Cards read "056/094", but the number is held as "56" — so typing what's
+    /// printed on the card, which is the whole point of this parser, found nothing.
+    /// Leading zeros are dropped from a purely numeric one to close that gap. The
+    /// API confirms nothing is lost: no card anywhere has a numeric collector
+    /// number with a leading zero, so "56" is the only form that can match.
+    ///
+    /// Prefixed numbers keep theirs. "SWSH001" is stored with its zeros intact and
+    /// "SWSH1" matches nothing at all, so trimming there would break every promo
+    /// it touched.
+    /// </summary>
+    private static string Number(string value)
+    {
+        var cleaned = Clean(value);
+        if (!cleaned.All(char.IsAsciiDigit)) return cleaned;
+
+        var trimmed = cleaned.TrimStart('0');
+        return trimmed.Length == 0 ? "0" : trimmed;
+    }
 
     /// <summary>Strips characters that would break out of the query's own syntax.</summary>
     private static string Clean(string value)

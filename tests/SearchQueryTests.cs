@@ -21,8 +21,42 @@ public class SearchQueryTests
     public void Bare_numbers_search_by_collector_number(string input, string expected)
         => Assert.Equal(expected, SearchQuery.Build(input, null));
 
+    /// <summary>
+    /// Modern cards pad the collector number — "056/094" — but the catalogue stores
+    /// it as "56", so typing what's on the card found nothing at all. The padding has
+    /// to come off, and only where it's safe to remove it.
+    /// </summary>
+    [Theory]
+    [InlineData("056", "number:56")]
+    [InlineData("007", "number:7")]
+    [InlineData("0004", "number:4")]
+    public void Padded_numbers_lose_their_leading_zeros(string input, string expected)
+        => Assert.Equal(expected, SearchQuery.Build(input, null));
+
+    /// <summary>
+    /// Prefixed numbers keep their padding: "SWSH039" is stored with its zeros and
+    /// "SWSH39" matches nothing, so trimming these would break the promos rather
+    /// than fix them. Four-letter prefixes have to parse as numbers at all — at the
+    /// old three-character cap they fell through to a name search that could never
+    /// match a collector number.
+    /// </summary>
+    [Theory]
+    [InlineData("SWSH039", "number:SWSH039")]
+    [InlineData("HGSS01", "number:HGSS01")]
+    [InlineData("SV049", "number:SV049")]
+    [InlineData("TG01", "number:TG01")]
+    [InlineData("XY01", "number:XY01")]
+    public void Prefixed_numbers_keep_theirs(string input, string expected)
+        => Assert.Equal(expected, SearchQuery.Build(input, null));
+
+    [Fact]
+    public void A_number_that_is_all_zeros_stays_a_number()
+        => Assert.Equal("number:0", SearchQuery.Build("000", null));
+
     [Theory]
     [InlineData("4/102", "number:4 set.printedTotal:102")]
+    [InlineData("056/094", "number:56 set.printedTotal:94")]
+    [InlineData("006/165", "number:6 set.printedTotal:165")]
     [InlineData("58/102", "number:58 set.printedTotal:102")]
     [InlineData("4 / 102", "number:4 set.printedTotal:102")]
     [InlineData("TG12/TG30", "number:TG12")] // non-numeric total can't filter on printedTotal
@@ -57,6 +91,8 @@ public class SearchQueryTests
     [Theory]
     [InlineData("charizard 4", "name:\"*charizard*\" number:4")]
     [InlineData("charizard 4/102", "name:\"*charizard*\" number:4 set.printedTotal:102")]
+    [InlineData("charizard 056/094", "name:\"*charizard*\" number:56 set.printedTotal:94")]
+    [InlineData("iron valiant 089", "name:\"*iron valiant*\" number:89")]
     public void A_name_followed_by_a_number_uses_both(string input, string expected)
         => Assert.Equal(expected, SearchQuery.Build(input, null));
 
