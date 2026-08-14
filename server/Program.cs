@@ -828,11 +828,16 @@ app.MapPost("/api/import/{jobId}/commit", (string jobId, CommitRequest req, Impo
 
 app.MapGet("/api/import/template", () =>
 {
+    // The last two rows are the point of the template as much as the headers: a
+    // number written the way the card prints it identifies the set by itself, so
+    // the Set column can be left empty and a spreadsheet becomes one column of
+    // numbers typed off the cards.
     const string csv =
         "Name,Set,Number,Quantity,Variant,Condition,Purchase Price,Purchase Date,Notes\n" +
         "Charizard,Base,4,1,Holofoil,NM,250.00,1999-01-09,Childhood card\n" +
         "Pikachu,Base,58,3,Normal,LP,4.00,,\n" +
-        "Charizard ex,151,6,2,Holofoil,NM,12.50,,\n";
+        ",,045/094,1,,NM,,,Number as printed - the set is worked out from it\n" +
+        ",,45094,1,,NM,,,The same thing with nothing typed but digits\n";
     return Results.File(System.Text.Encoding.UTF8.GetBytes(csv), "text/csv", "card-vault-template.csv");
 });
 
