@@ -350,13 +350,7 @@ function SetDetail({
                       </span>
                     ) : null
                   }
-                  corner={
-                    card.marketPrice != null ? (
-                      <span className="rounded-full bg-black/75 px-2 py-0.5 text-[11px] font-medium text-gold tabular-nums backdrop-blur">
-                        {money(card.marketPrice)}
-                      </span>
-                    ) : null
-                  }
+                  price={card.marketPrice != null ? money(card.marketPrice) : null}
                   footer={
                     <button
                       onClick={(e) => {

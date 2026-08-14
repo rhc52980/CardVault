@@ -303,13 +303,7 @@ export function CollectionView({
                 )}
               </div>
             }
-            corner={
-              item.lineValue != null ? (
-                <span className="rounded-full bg-black/75 px-2 py-0.5 text-[11px] font-medium text-gold tabular-nums backdrop-blur">
-                  {money(item.lineValue)}
-                </span>
-              ) : null
-            }
+            price={item.lineValue != null ? money(item.lineValue) : null}
             footer={
               <div className="text-[11px] text-white/85">
                 <div className="truncate">
