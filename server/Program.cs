@@ -332,6 +332,11 @@ app.MapPost("/api/collection", async (
         if (seeded is not null)
         {
             cache.Upsert(seeded.Value);
+
+            // Then go and get the real thing, without making anyone wait for it. The
+            // card is already in the collection; this fills in its price and its true
+            // printings a few seconds later, and costs nothing if it fails.
+            snapshots.QueueEnrich(req.CardId);
         }
         else
         {
@@ -723,11 +728,19 @@ app.MapPut("/api/prices/sources/preferred", (
     return Results.Ok(new { preferred = settings.PreferredPriceSource });
 });
 
-app.MapPost("/api/prices/snapshot", async (PriceSnapshotService snapshots, CancellationToken ct) =>
+// Starts a refresh and returns immediately. Refreshing is one API call per card
+// with pacing between them, so a large collection takes minutes — long enough that
+// awaiting it here would just time the request out.
+app.MapPost("/api/prices/snapshot", (PriceSnapshotService snapshots) =>
 {
-    var count = await snapshots.CaptureAsync(ct);
-    return Results.Ok(new { captured = count });
+    if (!snapshots.StartRefresh())
+        return Results.Conflict(new { error = "A price refresh is already running." });
+
+    return Results.Accepted("/api/prices/snapshot", snapshots.RefreshProgress);
 });
+
+app.MapGet("/api/prices/snapshot", (PriceSnapshotService snapshots)
+    => Results.Ok(snapshots.RefreshProgress));
 
 // -------------------------------------------------------------- CSV bulk import
 
