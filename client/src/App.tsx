@@ -3,6 +3,7 @@ import { api } from './api'
 import { CollectionView } from './components/CollectionView'
 import { ImportView } from './components/ImportView'
 import { LoginScreen } from './components/LoginScreen'
+import { PriceRefreshButton } from './components/PriceRefreshButton'
 import { SearchView } from './components/SearchView'
 import { SetsView } from './components/SetsView'
 import { SettingsView } from './components/SettingsView'
@@ -149,6 +150,12 @@ export default function App() {
         {tab === 'vault' && (
           <div className="mb-6">
             <StatsBar stats={stats} />
+            {/* Next to the totals it acts on, rather than only buried in Settings.
+                Reloads the collection when a run ends so the new prices appear
+                without anyone thinking to refresh the page. */}
+            <div className="mt-3 flex justify-end">
+              <PriceRefreshButton onFinished={refresh} compact />
+            </div>
           </div>
         )}
 

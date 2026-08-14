@@ -156,11 +156,25 @@ var staticFileOptions = new StaticFileOptions
             headers.CacheControl = "no-cache, no-store, must-revalidate";
             headers.Pragma = "no-cache";
             headers.Expires = "0";
+            return;
         }
-        else
-        {
-            headers.CacheControl = "public, max-age=31536000, immutable";
-        }
+
+        // Only the fingerprinted bundles may be cached hard. Vite puts a content
+        // hash in those filenames, so the URL genuinely never serves different
+        // bytes and "immutable" is a promise we can keep.
+        //
+        // Everything else under wwwroot keeps its name for the life of the app —
+        // logo.png, favicon.ico, the manifest icons. Caching those as immutable
+        // told every browser to hold them for a year AND not to revalidate, which
+        // meant replacing the artwork changed nothing for anyone who had already
+        // loaded the old one. They revalidate instead: small files, and a 304 on
+        // an unchanged one costs almost nothing.
+        var path = ctx.Context.Request.Path.Value ?? "";
+        var fingerprinted = path.StartsWith("/assets/", StringComparison.OrdinalIgnoreCase);
+
+        headers.CacheControl = fingerprinted
+            ? "public, max-age=31536000, immutable"
+            : "no-cache";
     },
 };
 
