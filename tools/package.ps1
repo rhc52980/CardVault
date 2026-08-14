@@ -10,12 +10,22 @@
 # Nothing gitignored goes in -- the file list comes from git, so node_modules,
 # bin, obj and appsettings.Local.json (your API key) are excluded by
 # construction rather than by a filter someone has to remember to update.
+#
+# Older packages in the output folder are removed once the new one is written.
+# Every zip is reproducible from its commit, so keeping them buys nothing, and an
+# older one sitting next to the new one is a real chance to install the wrong
+# version. -KeepOld opts out.
 
 param(
     [string]$OutputDir = "$env:USERPROFILE\Downloads",
     # Package anyway with uncommitted changes present. They still won't be
     # included -- see the check below for why that's worth refusing over.
-    [switch]$AllowDirty
+    [switch]$AllowDirty,
+    # Leave older CardVault-*.zip files alone. They pile up otherwise, and an
+    # older one sitting beside the new one is a real chance to install the wrong
+    # thing -- every zip is reproducible from its commit, so none of them are
+    # worth keeping by default.
+    [switch]$KeepOld
 )
 
 $ErrorActionPreference = "Stop"
@@ -102,10 +112,29 @@ try {
     finally { Pop-Location }
     Remove-Item $wrapper -Recurse -Force
 
+    # Only ever after the new zip exists, so a failure part way through can't
+    # leave the folder with nothing installable in it.
+    if (-not $KeepOld) {
+        $superseded = Get-ChildItem $OutputDir -Filter "CardVault-*.zip" -File -ErrorAction SilentlyContinue |
+            Where-Object { $_.FullName -ne $zip }
+
+        foreach ($old in $superseded) {
+            try {
+                Remove-Item $old.FullName -Force
+                Step "Removed superseded $($old.Name)"
+            }
+            catch {
+                # Not worth failing a good build over -- say so and carry on.
+                Write-Host "Could not remove $($old.Name): $($_.Exception.Message)" -ForegroundColor Yellow
+            }
+        }
+    }
+
     $size = [Math]::Round((Get-Item $zip).Length / 1MB, 1)
     Write-Host ""
     Write-Host "CardVault $version packaged: $zip ($size MB)" -ForegroundColor Green
     Write-Host "Installing from it needs only the .NET SDK - the web UI is already built."
+    if (-not $KeepOld) { Write-Host "Older packages were removed. Pass -KeepOld to keep them." -ForegroundColor Gray }
 }
 finally {
     if (Test-Path $staging) { Remove-Item $staging -Recurse -Force -ErrorAction SilentlyContinue }
