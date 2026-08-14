@@ -64,9 +64,14 @@ def flattened(img: Image.Image, size: int) -> Image.Image:
     return out
 
 
-# The pokéball dial, for if the favicon ever needs to be legible at 16px more
-# than it needs to carry the wordmark. See the note in main().
-FOCAL_CROP = (0.50, 0.22, 0.92, 0.66)
+# The pokéball, for if the favicon ever needs to be legible at 16px more than it
+# needs to carry the wordmark. See the note in main().
+#
+# These are fractions of the artwork, so they only hold for the artwork they were
+# measured against — the previous logo had its pokéball as a vault dial off to the
+# right, and this crop framed that. Re-measure it if the brand art is replaced
+# again, or focal() will confidently crop the wrong part of the picture.
+FOCAL_CROP = (0.26, 0.21, 0.74, 0.69)
 
 
 def focal(img: Image.Image) -> Image.Image:
