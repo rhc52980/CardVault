@@ -304,6 +304,29 @@ export function CollectionView({
               </div>
             }
             price={item.lineValue != null ? money(item.lineValue) : null}
+            note={(() => {
+              // What it cost and what that's done, without needing to hover. Your
+              // own valuation wins, so a slab compares against what it's really
+              // worth rather than the raw card's market price.
+              if (item.purchasePrice == null) return null
+
+              const cost = item.purchasePrice * item.quantity
+              const worth = item.manualValue ?? item.marketPrice
+              const delta = worth == null ? null : worth * item.quantity - cost
+
+              return (
+                <>
+                  <span className="text-mute">{money(cost)} paid</span>
+                  {delta != null && (
+                    <span className={delta >= 0 ? 'text-mint' : 'text-rose'}>
+                      {' · '}
+                      {delta >= 0 ? '+' : '−'}
+                      {money(Math.abs(delta))}
+                    </span>
+                  )}
+                </>
+              )
+            })()}
             footer={
               <div className="text-[11px] text-white/85">
                 <div className="truncate">
@@ -311,19 +334,6 @@ export function CollectionView({
                   {item.grade ? ` · ${item.grade}` : ''}
                 </div>
                 {item.location && <div className="truncate text-white/70">📍 {item.location}</div>}
-                {(() => {
-                  // Your own valuation wins, so a slab compares against what it's
-                  // really worth rather than the raw card's market price.
-                  const worth = item.manualValue ?? item.marketPrice
-                  if (item.purchasePrice == null || worth == null) return null
-                  const up = worth >= item.purchasePrice
-                  return (
-                    <div className={up ? 'text-mint' : 'text-rose'}>
-                      {up ? '+' : ''}
-                      {money((worth - item.purchasePrice) * item.quantity)} vs paid
-                    </div>
-                  )
-                })()}
               </div>
             }
             onClick={() => setDetailCardId(item.cardId)}
