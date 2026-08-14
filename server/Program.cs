@@ -75,6 +75,10 @@ builder.Services.AddSingleton<IPriceSource, CardmarketPriceSource>();
 // two it goes to the network and needs credentials, and it only prices the custom
 // items the catalogue knows nothing about.
 builder.Services.AddSingleton<EbayClient>();
+
+// Scrydex: the catalogue that has Japanese cards, which the free English-only
+// API cannot offer at all.
+builder.Services.AddSingleton<ScrydexClient>();
 builder.Services.AddSingleton<IPriceSource, EbayPriceSource>();
 
 builder.Services.AddSingleton<PriceSnapshotService>();
@@ -540,6 +544,7 @@ app.MapGet("/api/settings", async (
     {
         apiKey = settings.GetApiKeyStatus(),
         ebay = settings.GetEbayStatus(),
+        scrydex = settings.GetScrydexStatus(),
         dataDirectory = paths.Root,
         migratedFromLegacy = paths.MigratedFromLegacy,
         legacyDirectory = paths.MigratedFrom ?? DataPaths.LegacyDirectory,
@@ -638,6 +643,42 @@ app.MapDelete("/api/settings/ebay", (SettingsService settings) =>
 {
     settings.ClearEbayCredentials();
     return Results.Ok(new { ebay = settings.GetEbayStatus() });
+});
+
+app.MapPut("/api/settings/scrydex", async (
+    ScrydexCredentialsRequest req, SettingsService settings, ScrydexClient scrydex, CancellationToken ct) =>
+{
+    var key = req.ApiKey?.Trim();
+    var team = req.TeamId?.Trim();
+
+    if (string.IsNullOrWhiteSpace(key) || string.IsNullOrWhiteSpace(team))
+        return Results.BadRequest(new { error = "Both the API key and the Team ID are required." });
+
+    settings.SetScrydexCredentials(key, team);
+
+    // Scrydex rejects bad credentials outright, so this is a real answer rather
+    // than "the service replied".
+    var reachable = await scrydex.TestConnectionAsync(ct);
+
+    return Results.Ok(new { saved = true, reachable, scrydex = settings.GetScrydexStatus() });
+});
+
+app.MapDelete("/api/settings/scrydex", (SettingsService settings) =>
+{
+    settings.ClearScrydexCredentials();
+    return Results.Ok(new { scrydex = settings.GetScrydexStatus() });
+});
+
+/// A one-off look at exactly what Scrydex returns, so the price mapping can be
+/// checked against a real response rather than against the documentation, which
+/// does not publish the field names inside a price entry.
+app.MapGet("/api/settings/scrydex/probe", async (
+    ScrydexClient scrydex, CancellationToken ct, string q = "pikachu", string language = "ja") =>
+{
+    if (!scrydex.IsConfigured) return Results.BadRequest(new { error = "No Scrydex credentials saved." });
+
+    var cards = await scrydex.SearchAsync(q, language, 3, ct);
+    return Results.Ok(new { count = cards.Count, cards });
 });
 
 // ------------------------------------------------------------ offline catalogue

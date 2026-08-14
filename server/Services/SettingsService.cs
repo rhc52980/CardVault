@@ -7,6 +7,9 @@ public sealed record ApiKeyStatus(bool Configured, string? Masked, string Source
 /// <summary>eBay OAuth application credentials. Both halves or neither.</summary>
 public sealed record EbayCredentials(string ClientId, string ClientSecret);
 
+/// <summary>Scrydex credentials. Both headers go on every request, so both or neither.</summary>
+public sealed record ScrydexCredentials(string ApiKey, string TeamId);
+
 /// <summary>
 /// App settings, and in particular the pokemontcg.io API key.
 ///
@@ -21,6 +24,8 @@ public sealed class SettingsService(Db db, IConfiguration config)
     private const string PreferredSourceSetting = "preferred_price_source";
     private const string EbayClientIdSetting = "ebay_client_id";
     private const string EbayClientSecretSetting = "ebay_client_secret";
+    private const string ScrydexApiKeySetting = "scrydex_api_key";
+    private const string ScrydexTeamIdSetting = "scrydex_team_id";
 
     /// <summary>
     /// Which market drives valuation. One source, never a blend — they report
@@ -106,6 +111,44 @@ public sealed class SettingsService(Db db, IConfiguration config)
     {
         Delete(EbayClientIdSetting);
         Delete(EbayClientSecretSetting);
+    }
+
+    /// <summary>
+    /// Scrydex credentials, or null unless both are present. Same reasoning as
+    /// eBay: every request needs both headers, so half a pair is no use.
+    /// </summary>
+    public ScrydexCredentials? GetScrydexCredentials()
+    {
+        var key = Get(ScrydexApiKeySetting) ?? config["Scrydex:ApiKey"] ?? config["SCRYDEX_API_KEY"];
+        var team = Get(ScrydexTeamIdSetting) ?? config["Scrydex:TeamId"] ?? config["SCRYDEX_TEAM_ID"];
+
+        return string.IsNullOrWhiteSpace(key) || string.IsNullOrWhiteSpace(team)
+            ? null
+            : new ScrydexCredentials(key.Trim(), team.Trim());
+    }
+
+    public ApiKeyStatus GetScrydexStatus()
+    {
+        var storedKey = Get(ScrydexApiKeySetting);
+        var storedTeam = Get(ScrydexTeamIdSetting);
+        if (!string.IsNullOrWhiteSpace(storedKey) && !string.IsNullOrWhiteSpace(storedTeam))
+            return new ApiKeyStatus(true, Mask(storedKey), "Saved in this app");
+
+        return GetScrydexCredentials() is { } fromConfig
+            ? new ApiKeyStatus(true, Mask(fromConfig.ApiKey), "appsettings.Local.json or environment")
+            : new ApiKeyStatus(false, null, "Not set");
+    }
+
+    public void SetScrydexCredentials(string apiKey, string teamId)
+    {
+        Set(ScrydexApiKeySetting, apiKey.Trim());
+        Set(ScrydexTeamIdSetting, teamId.Trim());
+    }
+
+    public void ClearScrydexCredentials()
+    {
+        Delete(ScrydexApiKeySetting);
+        Delete(ScrydexTeamIdSetting);
     }
 
     /// <summary>
