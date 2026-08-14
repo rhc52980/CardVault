@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { api, cardImage, money } from '../api'
 import { prettyVariant, rarityClass, typeClass } from '../lib/cardStyles'
 import type { CollectionItem, FullCard } from '../types'
+import { ConfirmButton } from './ConfirmButton'
 import { Modal } from './Modal'
 import { PriceChart } from './PriceChart'
 import { SellDialog } from './SellDialog'
@@ -467,14 +468,13 @@ function OwnedRow({ entry, onChanged }: { entry: CollectionItem; onChanged: () =
         >
           Sell
         </button>
-        <button
-          onClick={remove}
+        <ConfirmButton
+          onConfirm={remove}
           disabled={busy}
+          label="Remove"
+          confirm="Remove from vault"
           title="Deletes it outright, with no record kept — use Sell if it sold"
-          className="rounded-md px-2 py-1 text-xs text-mute transition hover:bg-rose/10 hover:text-rose disabled:opacity-30"
-        >
-          Remove
-        </button>
+        />
       </div>
 
       {selling && (

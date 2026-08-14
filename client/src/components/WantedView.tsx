@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { api, cardImage, money } from '../api'
 import { CONDITIONS, CONDITION_LABELS, prettyVariant, rarityClass } from '../lib/cardStyles'
 import type { WantItem } from '../types'
+import { ConfirmButton } from './ConfirmButton'
 import { Modal } from './Modal'
 
 const control =
@@ -237,13 +238,12 @@ function WantRow({
         >
           Got it
         </button>
-        <button
-          onClick={remove}
+        <ConfirmButton
+          onConfirm={remove}
           disabled={busy}
-          className="rounded-md px-2 py-1 text-xs text-mute transition hover:text-rose disabled:opacity-40"
-        >
-          Remove
-        </button>
+          label="Remove"
+          confirm="Remove from want list"
+        />
       </div>
     </div>
   )
