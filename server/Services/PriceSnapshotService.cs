@@ -22,6 +22,68 @@ public sealed class PriceSnapshotService(
 {
     private static readonly TimeSpan Interval = TimeSpan.FromHours(24);
 
+    private readonly object _refreshLock = new();
+    private PriceRefreshProgress _refresh = new(false, 0, 0, null, null, null);
+
+    /// <summary>How a refresh is getting on, whether you started it or the timer did.</summary>
+    public PriceRefreshProgress RefreshProgress => _refresh;
+
+    /// <summary>
+    /// Refreshes prices now, in the background, and reports whether it started.
+    ///
+    /// Returns false when one is already running rather than queueing a second: two
+    /// concurrent sweeps would double the API load to reach the same answer, and the
+    /// daily timer can be part-way through one at any moment.
+    /// </summary>
+    public bool StartRefresh()
+    {
+        lock (_refreshLock)
+        {
+            if (_refresh.Running) return false;
+            _refresh = new PriceRefreshProgress(true, 0, 0, "Starting", null, null);
+        }
+
+        _ = Task.Run(async () =>
+        {
+            try { await CaptureAsync(CancellationToken.None); }
+            catch (Exception e) { log.LogError(e, "Manual price refresh failed"); }
+        }, CancellationToken.None);
+
+        return true;
+    }
+
+    /// <summary>
+    /// Fetches one card's real data in the background, after it has already been
+    /// added to the collection.
+    ///
+    /// This is for cards added from the offline catalogue, which arrive with no price
+    /// and a guessed printing because nothing touched the network. The add itself
+    /// stays instant and cannot fail; this catches up a few seconds later. When it
+    /// doesn't — the API being the API — the daily refresh gets it within the day,
+    /// which is why there is deliberately no retry here.
+    /// </summary>
+    public void QueueEnrich(string cardId)
+    {
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var card = await api.GetCardAsync(cardId, CancellationToken.None);
+                if (card is null) return;
+
+                cache.Upsert(card.Value);
+                await RecordFromAllSourcesAsync(
+                    cardId, card.Value, DateTime.UtcNow.ToString("yyyy-MM-dd"), CancellationToken.None);
+
+                log.LogInformation("Filled in prices for newly added {CardId}", cardId);
+            }
+            catch (Exception e)
+            {
+                log.LogDebug(e, "Could not fill in prices for {CardId} yet; the daily refresh will", cardId);
+            }
+        }, CancellationToken.None);
+    }
+
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
         // Let the web host settle before hitting the network.
@@ -55,16 +117,39 @@ public sealed class PriceSnapshotService(
     public async Task<int> CaptureAsync(CancellationToken ct)
     {
         var cardIds = OwnedCardIds();
-        if (cardIds.Count == 0) return 0;
+
+        // Progress is tracked here rather than in the caller so the daily run reports
+        // itself too — otherwise the UI would show "idle" while the timer was part-way
+        // through a sweep, and pressing refresh would look like it did nothing.
+        _refresh = new PriceRefreshProgress(true, 0, cardIds.Count, null, null, null);
+
+        if (cardIds.Count == 0)
+        {
+            _refresh = _refresh with { Running = false, FinishedAt = DateTime.UtcNow.ToString("o") };
+            return 0;
+        }
 
         var today = DateTime.UtcNow.ToString("yyyy-MM-dd");
         var captured = 0;
 
+        // Counted apart from `captured` so the progress bar measures how far through
+        // the collection we are, not how many cards the API happened to answer for.
+        // A run where pokemontcg.io refuses half the cards has still finished; a bar
+        // stopping at 50% with no explanation just looks broken.
+        var processed = 0;
+
+        try
+        {
         // One request per card. Batching with "id:a OR id:b" looks tempting but the
         // API 500s on those queries, and the per-card endpoint is reliable.
         foreach (var id in cardIds)
         {
             ct.ThrowIfCancellationRequested();
+
+            // At the top, before any of the `continue`s below — a card we skip has
+            // still been dealt with as far as progress is concerned.
+            processed++;
+            _refresh = _refresh with { Done = processed, Detail = id };
 
             if (CustomItemService.IsCustomId(id))
             {
@@ -105,6 +190,25 @@ public sealed class PriceSnapshotService(
         }
 
         return captured;
+        }
+        catch (Exception e)
+        {
+            _refresh = _refresh with { Error = e.Message };
+            throw;
+        }
+        finally
+        {
+            // Always clears, so a failure can't leave the UI spinning forever or
+            // block the next refresh from starting.
+            _refresh = _refresh with
+            {
+                Running = false,
+                // Says so plainly when the API refused some of them, rather than
+                // leaving a short count to be puzzled over.
+                Detail = captured < processed ? $"{captured} of {processed} refreshed" : null,
+                FinishedAt = DateTime.UtcNow.ToString("o"),
+            };
+        }
     }
 
     /// <summary>

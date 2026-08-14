@@ -253,6 +253,16 @@ export interface CatalogueProgress {
   error?: string | null
 }
 
+/** A price refresh in flight, whether you started it or the daily timer did. */
+export interface PriceRefreshProgress {
+  running: boolean
+  done: number
+  total: number
+  detail?: string | null
+  error?: string | null
+  finishedAt?: string | null
+}
+
 export interface CatalogueStatus {
   enabled: boolean
   cards: number

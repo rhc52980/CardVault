@@ -4,6 +4,7 @@ import type {
   AppSettings,
   AuthStatus,
   CatalogueStatus,
+  PriceRefreshProgress,
   PriceSourceSettings,
   SessionInfo,
 } from '../types'
@@ -59,18 +60,41 @@ export function SettingsView({ onAuthChanged }: { onAuthChanged: () => void }) {
 function PriceSourcesCard() {
   const [state, setState] = useState<PriceSourceSettings | null>(null)
   const [busy, setBusy] = useState(false)
+  const [refresh, setRefresh] = useState<PriceRefreshProgress | null>(null)
 
   const load = () => api.priceSources().then(setState).catch(() => {})
+  const loadRefresh = () => api.refreshProgress().then(setRefresh).catch(() => {})
 
   useEffect(() => {
     void load()
+    void loadRefresh()
   }, [])
+
+  // Poll only while a refresh is actually running — the daily timer can start one
+  // on its own, so this reflects that too rather than only what you pressed.
+  useEffect(() => {
+    if (!refresh?.running) return
+    const id = setInterval(() => void loadRefresh(), 1000)
+    return () => clearInterval(id)
+  }, [refresh?.running])
 
   async function choose(id: string) {
     setBusy(true)
     try {
       await api.setPreferredPriceSource(id)
       await load()
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function startRefresh() {
+    setBusy(true)
+    try {
+      setRefresh(await api.refreshPrices())
+    } catch {
+      // A 409 means the daily run beat us to it, which is not worth an error.
+      await loadRefresh()
     } finally {
       setBusy(false)
     }
@@ -110,7 +134,34 @@ function PriceSourcesCard() {
         ))}
       </div>
 
+      <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-edge pt-3">
+        <button
+          onClick={startRefresh}
+          disabled={busy || refresh?.running}
+          className="rounded-lg border border-edge px-4 py-2 text-sm text-bright transition hover:border-arc disabled:opacity-40"
+        >
+          {refresh?.running ? 'Refreshing…' : 'Refresh prices now'}
+        </button>
+
+        {refresh?.running ? (
+          <span className="text-xs text-mute tabular-nums">
+            {refresh.done.toLocaleString()} / {refresh.total.toLocaleString()} cards
+          </span>
+        ) : refresh?.error ? (
+          <span className="text-xs text-rose">{refresh.error}</span>
+        ) : refresh?.finishedAt ? (
+          <span className="text-xs text-mute">
+            Last run {when(refresh.finishedAt)}
+            {refresh.detail ? ` · ${refresh.detail}` : ''}
+          </span>
+        ) : null}
+      </div>
+
       <p className="mt-3 text-xs text-mute">
+        Prices refresh on their own once a day. This asks for it now — worth doing after adding
+        cards from the offline catalogue, which arrive without one until the next run.
+      </p>
+      <p className="mt-2 text-xs text-mute">
         Values are never blended. These are separate markets quoting different currencies, so an
         average across them would mean nothing — the chosen source is used as-is, and your own
         valuation on an entry still overrides it.
