@@ -36,28 +36,62 @@ public sealed class BackupService(DataPaths paths, Db db, ILogger<BackupService>
             var lastVersion = GetSetting("app_version");
             var versionChanged = lastVersion is not null && lastVersion != AppVersion;
 
-            var latest = List().FirstOrDefault();
-            var dueByTime = latest is null || DateTime.UtcNow - latest.CreatedUtc >= MinimumInterval;
-
             if (versionChanged)
             {
                 Create($"update-{lastVersion}-to-{AppVersion}");
                 log.LogInformation("Version changed from {Old} to {New}; backed up before continuing",
                     lastVersion, AppVersion);
+                Prune();
             }
-            else if (dueByTime)
+            else
             {
-                Create("daily");
+                BackupIfDue();
             }
 
             SetSetting("app_version", AppVersion);
-            Prune();
         }
         catch (Exception e)
         {
             // A failed backup must never stop the app from starting.
             log.LogError(e, "Startup backup failed");
         }
+    }
+
+    /// <summary>
+    /// Takes the daily backup if enough time has passed, and returns whether it did.
+    ///
+    /// Called both at startup and on a timer while the app runs. Startup alone used
+    /// to be the only trigger, which quietly meant a machine that never restarts
+    /// never backed up — exactly the always-on server this is most wanted on. The
+    /// interval is measured from the newest backup on disk rather than from when the
+    /// process started, so restarts neither skip a backup nor cause an extra one.
+    /// </summary>
+    public bool BackupIfDue()
+    {
+        if (!File.Exists(paths.DatabaseFile)) return false;
+
+        if (!IsDue(List().FirstOrDefault()?.CreatedUtc, DateTime.UtcNow, MinimumInterval)) return false;
+
+        Create("daily");
+        Prune();
+        return true;
+    }
+
+    /// <summary>
+    /// Whether a backup is owed. Separated out because it's the one rule here worth
+    /// pinning down in a test — everything else touches the filesystem.
+    /// </summary>
+    internal static bool IsDue(DateTime? latestUtc, DateTime nowUtc, TimeSpan minimum)
+    {
+        // Nothing backed up yet: always due.
+        if (latestUtc is not { } latest) return true;
+
+        // A backup stamped in the future means the clock moved backwards. Treating
+        // that as "due" is the safe reading — the alternative is no backups at all
+        // until real time catches up with the bad timestamp.
+        if (latest > nowUtc) return true;
+
+        return nowUtc - latest >= minimum;
     }
 
     public BackupInfo Create(string reason)
