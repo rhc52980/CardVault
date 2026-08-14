@@ -154,6 +154,12 @@ try {
     # --- keep the launcher tools inside the install folder ---
     Copy-Item (Join-Path $PSScriptRoot "*") $InstallDir -Force -Include "Launch-CardVault.bat", "cardvault.ico"
 
+    # An existing desktop shortcut points at cardvault.ico by path, and that path
+    # doesn't change across updates -- only the picture inside it does. Windows
+    # caches shortcut icons by path, so without this it goes on showing the old
+    # artwork forever, which looks exactly like the update having failed.
+    try { & ie4uinit.exe -show } catch { }
+
     # --- service ---
     $svc = Get-Service -Name $Service -ErrorAction SilentlyContinue
     if (-not $svc) {

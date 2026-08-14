@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk.Web">
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -9,7 +9,7 @@
     <!-- Single source of truth for the app version. The backup service reads it
          to detect an update and snapshot the database before carrying on, so it
          has to be bumped on release for that protection to fire. -->
-    <Version>1.4.3</Version>
+    <Version>1.4.4</Version>
   </PropertyGroup>
 
   <!-- Stamped in at build time. The version alone can't tell two builds apart
@@ -26,7 +26,7 @@
     <Content Update="appsettings.Local.json" CopyToOutputDirectory="Never" CopyToPublishDirectory="Never" />
   </ItemGroup>
 
-  <!-- So the tests can reach helpers that shouldn't be public API — the price
+  <!-- So the tests can reach helpers that shouldn't be public API â€” the price
        statistics, the query building, and the rule for when a backup is owed.
        All worth pinning down, none with any business being called from outside
        the source that owns them. -->
@@ -56,3 +56,4 @@
   </ItemGroup>
 
 </Project>
+

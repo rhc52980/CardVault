@@ -6,13 +6,20 @@
     <meta name="theme-color" content="#06070c" />
     <meta name="description" content="Browse, value and track your Pokémon TCG collection." />
 
-    <!-- .ico carries 16/32/48 cropped to the vault, which stays readable at tab
-         size; the PNG is the full logo for anywhere with room for it. -->
-    <link rel="icon" href="/favicon.ico" sizes="16x16 32x32 48x48" />
-    <link rel="icon" href="/icon-192.png" type="image/png" sizes="192x192" />
+    <!-- .ico carries 16/32/48, which stays readable at tab size; the PNG is the
+         full logo for anywhere with room for it.
+
+         The ?v= is a cache buster, and it earns its keep: these keep their
+         filenames forever, and an earlier build served them as immutable for a
+         year, so browsers that saw the previous artwork will never ask for it
+         again on their own. Bump the number whenever the artwork changes. The
+         in-app logo needs no such thing — it is imported through the bundler and
+         comes out content-hashed. -->
+    <link rel="icon" href="/favicon.ico?v=2" sizes="16x16 32x32 48x48" />
+    <link rel="icon" href="/icon-192.png?v=2" type="image/png" sizes="192x192" />
 
     <!-- Without this, iOS "Add to Home Screen" uses a screenshot of the page. -->
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=2" />
     <meta name="apple-mobile-web-app-title" content="Vault" />
 
     <!-- Lets Android install it and launch without browser chrome. -->
