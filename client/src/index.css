@@ -16,6 +16,89 @@
   --font-display: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
 }
 
+/*
+ * Everything above is a Tailwind token, so `bg-abyss` compiles to
+ * var(--color-abyss) and a theme is nothing more than different values for the
+ * same names. The variables below are the bits that used to be hardcoded in the
+ * rules further down — panel gradients, the shimmer, the scrollbar, the ambient
+ * glow. They had to become variables too, or a light theme would have kept dark
+ * panels and an invisible scrollbar.
+ */
+:root {
+  --panel-a: rgba(26, 30, 48, 0.9);
+  --panel-b: rgba(18, 21, 35, 0.9);
+  --skeleton-a: #151828;
+  --skeleton-b: #1e2338;
+  --scroll-thumb: #232840;
+  --scroll-thumb-hover: #313858;
+  --glow-a: rgba(109, 139, 255, 0.16);
+  --glow-b: rgba(242, 182, 50, 0.1);
+  --tile-ring: rgba(255, 255, 255, 0.05);
+  --tile-shadow: rgba(0, 0, 0, 0.85);
+  /* Dimming laid over a custom background image so text stays readable on it. */
+  --wallpaper-scrim: rgba(6, 7, 12, 0.82);
+}
+
+html[data-theme='light'] {
+  --color-void: #eef0f6;
+  --color-abyss: #ffffff;
+  --color-surface: #ffffff;
+  --color-raised: #ffffff;
+  --color-edge: #d3d7e4;
+  --color-mute: #59607a;
+  --color-bright: #10131c;
+
+  /* Darkened so they still pass as text on white — the dark theme's gold and
+     mint are nearly illegible on a light panel. */
+  --color-gold: #9a6600;
+  --color-mint: #0a7a4d;
+  --color-rose: #c22546;
+  --color-arc: #3050dd;
+
+  --panel-a: rgba(255, 255, 255, 0.92);
+  --panel-b: rgba(246, 247, 251, 0.92);
+  --skeleton-a: #e3e6ef;
+  --skeleton-b: #f2f4f9;
+  --scroll-thumb: #c3c8d8;
+  --scroll-thumb-hover: #a9b0c6;
+  --glow-a: rgba(48, 80, 221, 0.1);
+  --glow-b: rgba(154, 102, 0, 0.08);
+  --tile-ring: rgba(0, 0, 0, 0.08);
+  --tile-shadow: rgba(20, 24, 40, 0.28);
+  --wallpaper-scrim: rgba(238, 240, 246, 0.85);
+}
+
+/* Pokéball red, Pokémon blue and the yellow off the logotype, on a deep navy. */
+html[data-theme='poke'] {
+  --color-void: #071021;
+  --color-abyss: #0b1730;
+  --color-surface: #102243;
+  --color-raised: #172c56;
+  --color-edge: #23406f;
+  --color-mute: #8fa5cc;
+  --color-bright: #f3f7ff;
+  --color-gold: #ffcb05;
+  --color-mint: #3ddc97;
+  /* Pokéball red and Pokémon blue exactly as branded came out at 3.6:1 and
+     4.2:1 on these panels, so losses and links were harder to read than they
+     are in the other themes. Lightened until both clear 4.5:1; the branded
+     values still drive the glow and the accents that aren't text. */
+  --color-rose: #ff6b6b;
+  --color-arc: #7aa2ff;
+
+  --panel-a: rgba(23, 44, 86, 0.9);
+  --panel-b: rgba(16, 34, 67, 0.9);
+  --skeleton-a: #10223f;
+  --skeleton-b: #1b3663;
+  --scroll-thumb: #24406e;
+  --scroll-thumb-hover: #35589a;
+  --glow-a: rgba(61, 125, 255, 0.2);
+  --glow-b: rgba(238, 21, 21, 0.14);
+  --tile-ring: rgba(255, 255, 255, 0.07);
+  --tile-shadow: rgba(0, 0, 0, 0.85);
+  --wallpaper-scrim: rgba(7, 16, 33, 0.82);
+}
+
 html,
 body,
 #root {
@@ -29,17 +112,74 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Ambient glow behind the whole app so flat panels don't read as dead space. */
+/*
+ * The layer behind everything. What it draws is chosen by data-bg on <html>:
+ * the ambient glow it has always had, nothing at all, a Pokéball motif, or an
+ * image of your own.
+ *
+ * All four are one fixed pseudo-element rather than four, so switching between
+ * them can't leave two backgrounds stacked.
+ */
 .aurora::before {
   content: '';
   position: fixed;
   inset: -30% -10% auto -10%;
   height: 60vh;
   background:
-    radial-gradient(45% 60% at 20% 0%, rgba(109, 139, 255, 0.16), transparent 70%),
-    radial-gradient(40% 55% at 80% 10%, rgba(242, 182, 50, 0.1), transparent 70%);
+    radial-gradient(45% 60% at 20% 0%, var(--glow-a), transparent 70%),
+    radial-gradient(40% 55% at 80% 10%, var(--glow-b), transparent 70%);
+  background-attachment: fixed;
   pointer-events: none;
   z-index: 0;
+}
+
+html[data-bg='none'] .aurora::before {
+  display: none;
+}
+
+/*
+ * A single large Pokéball, drawn rather than downloaded: the top half, the
+ * bottom half, the band and the button, all as gradients. Faint enough to sit
+ * under a grid of cards without competing with them, and it costs no request
+ * and no image to ship.
+ */
+html[data-bg='pokeball'] .aurora::before {
+  inset: 0;
+  height: 100%;
+  opacity: 0.5;
+  background:
+    radial-gradient(circle at 50% 50%, var(--color-bright) 0 6%, transparent 6.4%),
+    radial-gradient(circle at 50% 50%, var(--color-edge) 0 9%, transparent 9.4%),
+    linear-gradient(
+      to bottom,
+      transparent calc(50% - 2.5vmin),
+      var(--color-edge) calc(50% - 2.5vmin) calc(50% + 2.5vmin),
+      transparent calc(50% + 2.5vmin)
+    ),
+    radial-gradient(circle at 50% 50%, color-mix(in oklab, var(--color-rose) 22%, transparent) 0 40%, transparent 40.4%)
+      no-repeat,
+    radial-gradient(45% 60% at 20% 0%, var(--glow-a), transparent 70%);
+  background-size:
+    100% 100%,
+    100% 100%,
+    100% 100%,
+    100% 100%,
+    100% 60vh;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+/*
+ * Your own picture. The scrim is not optional — a photograph behind a grid of
+ * cards makes the text on them unreadable without one, and the point of a
+ * background is to be behind things.
+ */
+html[data-bg='custom'] .aurora::before {
+  inset: 0;
+  height: 100%;
+  background:
+    linear-gradient(var(--wallpaper-scrim), var(--wallpaper-scrim)),
+    var(--wallpaper, none) center / cover no-repeat fixed;
 }
 
 /* ------------------------------------------------------------------ card tile */
@@ -53,8 +193,8 @@ body {
 
 .card-tile:hover {
   box-shadow:
-    0 18px 40px -12px rgba(0, 0, 0, 0.85),
-    0 0 0 1px rgba(255, 255, 255, 0.12);
+    0 18px 40px -12px var(--tile-shadow),
+    0 0 0 1px color-mix(in oklab, var(--color-bright) 14%, transparent);
 }
 
 /*
@@ -85,7 +225,7 @@ body {
 /* --------------------------------------------------------------------- misc */
 
 .panel {
-  background: linear-gradient(180deg, rgba(26, 30, 48, 0.9), rgba(18, 21, 35, 0.9));
+  background: linear-gradient(180deg, var(--panel-a), var(--panel-b));
   border: 1px solid var(--color-edge);
   backdrop-filter: blur(12px);
 }
@@ -119,7 +259,12 @@ body {
 }
 
 .skeleton {
-  background: linear-gradient(90deg, #151828 25%, #1e2338 50%, #151828 75%);
+  background: linear-gradient(
+    90deg,
+    var(--skeleton-a) 25%,
+    var(--skeleton-b) 50%,
+    var(--skeleton-a) 75%
+  );
   background-size: 200% 100%;
   animation: shimmer 1.4s linear infinite;
 }
@@ -132,12 +277,12 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #232840;
+  background: var(--scroll-thumb);
   border-radius: 99px;
   border: 2px solid var(--color-void);
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #313858;
+  background: var(--scroll-thumb-hover);
 }
 
 @media (prefers-reduced-motion: reduce) {

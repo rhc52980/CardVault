@@ -7,6 +7,13 @@ import type {
   PriceSourceSettings,
   SessionInfo,
 } from '../types'
+import {
+  BACKGROUNDS,
+  THEMES,
+  loadAppearance,
+  saveAppearance,
+  type Appearance,
+} from '../lib/appearance'
 import { PriceRefreshButton } from './PriceRefreshButton'
 
 const field =
@@ -44,6 +51,7 @@ export function SettingsView({ onAuthChanged }: { onAuthChanged: () => void }) {
   return (
     <div className="max-w-3xl space-y-5">
       <VersionCard settings={settings} onChanged={load} />
+      <AppearanceCard />
       <PriceSourcesCard />
       <SecurityCard onAuthChanged={onAuthChanged} />
       <ApiKeyCard settings={settings} onChanged={load} />
@@ -52,6 +60,92 @@ export function SettingsView({ onAuthChanged }: { onAuthChanged: () => void }) {
       <DataCard settings={settings} />
       <BackupsCard settings={settings} onChanged={load} />
     </div>
+  )
+}
+
+// ---------------------------------------------------------------- appearance
+
+function AppearanceCard() {
+  const [current, setCurrent] = useState<Appearance>(() => loadAppearance())
+
+  function update(patch: Partial<Appearance>) {
+    const next = { ...current, ...patch }
+    setCurrent(next)
+    saveAppearance(next)
+  }
+
+  return (
+    <section className="panel rounded-xl p-4">
+      <h2 className="font-medium text-bright">Appearance</h2>
+      <p className="mt-1 text-sm text-mute">
+        Applies straight away, and is remembered on this device — so a phone and a desktop can
+        each look how they suit best.
+      </p>
+
+      <div className="mt-3 grid gap-2 sm:grid-cols-3">
+        {THEMES.map((t) => (
+          <button
+            key={t.key}
+            onClick={() => update({ theme: t.key })}
+            className={`rounded-lg px-3 py-2 text-left text-sm ring-1 transition ${
+              current.theme === t.key
+                ? 'bg-arc/10 text-bright ring-arc/40'
+                : 'bg-white/[0.03] text-mute ring-transparent hover:text-bright'
+            }`}
+          >
+            <span className="flex items-center gap-2">
+              <span className="flex shrink-0 overflow-hidden rounded-full ring-1 ring-edge">
+                {t.swatch.map((c) => (
+                  <span key={c} className="h-4 w-3" style={{ background: c }} />
+                ))}
+              </span>
+              <span className="font-medium">{t.label}</span>
+            </span>
+            <span className="mt-1 block text-xs text-mute">{t.hint}</span>
+          </button>
+        ))}
+      </div>
+
+      <h3 className="mt-4 text-sm font-medium text-bright">Behind the cards</h3>
+      <div className="mt-2 grid gap-2 sm:grid-cols-2">
+        {BACKGROUNDS.map((b) => (
+          <button
+            key={b.key}
+            onClick={() => update({ background: b.key })}
+            className={`rounded-lg px-3 py-2 text-left text-sm ring-1 transition ${
+              current.background === b.key
+                ? 'bg-arc/10 text-bright ring-arc/40'
+                : 'bg-white/[0.03] text-mute ring-transparent hover:text-bright'
+            }`}
+          >
+            <span className="font-medium">{b.label}</span>
+            <span className="mt-0.5 block text-xs text-mute">{b.hint}</span>
+          </button>
+        ))}
+      </div>
+
+      {current.background === 'custom' && (
+        <div className="mt-3">
+          <input
+            value={current.wallpaper}
+            onChange={(e) => update({ wallpaper: e.target.value })}
+            placeholder="https://example.com/wallpaper.jpg"
+            className={`${field} font-mono text-xs`}
+            autoComplete="off"
+          />
+          <p className="mt-2 text-xs text-mute">
+            The image is loaded straight from that address by your browser, so it has to be
+            reachable from wherever you're viewing the vault. Until you paste one, the ambient
+            glow is used instead of a blank screen.
+          </p>
+        </div>
+      )}
+
+      <p className="mt-3 text-xs text-mute">
+        Card artwork is never tinted by any of this — the cards keep their own colours, and the
+        theme only touches the app around them.
+      </p>
+    </section>
   )
 }
 
