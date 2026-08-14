@@ -170,7 +170,21 @@ public sealed record WantItem(
 
 public sealed record PricePoint(string Date, double Market, double? Low, double? High);
 
-public sealed record PriceSeries(string Variant, IReadOnlyList<PricePoint> Points);
+/// <summary>
+/// One line on the price chart: a printing, from one market. Currency is carried
+/// rather than assumed — these are different markets and their figures are not
+/// interchangeable.
+/// </summary>
+public sealed record PriceSeries(
+    string Variant,
+    string Source,
+    string SourceName,
+    string Currency,
+    IReadOnlyList<PricePoint> Points);
+
+public sealed record PriceSourceInfo(string Id, string Name, string Currency);
+
+public sealed record PreferredSourceRequest(string? Source);
 
 public sealed record CardHistory(
     string CardId,

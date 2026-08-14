@@ -74,17 +74,24 @@ public sealed class Db
 
             CREATE INDEX IF NOT EXISTS idx_collection_card ON collection(card_id);
 
-            -- One row per card+variant+day. Lets us chart what the collection is
-            -- worth over time, which the API itself does not expose.
+            -- One row per card + printing + source + day, which is what lets the
+            -- collection be charted over time — the API itself exposes only today.
+            --
+            -- Source is part of the key so several markets can be tracked side by
+            -- side. Currency travels with the row rather than being assumed: these
+            -- are different markets in different currencies, and quietly adding a
+            -- euro figure to a dollar one would be worse than having no figure.
             CREATE TABLE IF NOT EXISTS price_history (
                 card_id     TEXT NOT NULL,
                 variant     TEXT NOT NULL,
+                source      TEXT NOT NULL DEFAULT 'tcgplayer',
+                currency    TEXT NOT NULL DEFAULT 'USD',
                 captured_on TEXT NOT NULL,
                 market      REAL,
                 low         REAL,
                 mid         REAL,
                 high        REAL,
-                PRIMARY KEY (card_id, variant, captured_on)
+                PRIMARY KEY (card_id, variant, source, captured_on)
             );
 
             CREATE TABLE IF NOT EXISTS sets (
@@ -183,6 +190,58 @@ public sealed class Db
         // Where the card physically is — "Binder 3, page 4", "Box A", "Safe".
         // The app knows what you own; this is so you can also find it.
         AddColumn(conn, "collection", "location", "TEXT");
+
+        MigratePriceHistoryToSources(conn);
+    }
+
+    /// <summary>
+    /// Rebuilds price_history with source and currency in the primary key.
+    ///
+    /// This can't be an ALTER: SQLite won't change a primary key, so the table has
+    /// to be recreated and the rows copied. Everything already recorded came from
+    /// TCGplayer via pokemontcg.io, so that's what existing rows are labelled — and
+    /// they're carried across rather than discarded, since price history is the one
+    /// thing in here that can't be re-fetched.
+    /// </summary>
+    private static void MigratePriceHistoryToSources(SqliteConnection conn)
+    {
+        using (var check = conn.CreateCommand())
+        {
+            check.CommandText = "SELECT COUNT(*) FROM pragma_table_info('price_history') WHERE name = 'source'";
+            if (Convert.ToInt64(check.ExecuteScalar()) > 0) return;
+        }
+
+        using var tx = conn.BeginTransaction();
+
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.Transaction = tx;
+            cmd.CommandText = """
+                CREATE TABLE price_history_new (
+                    card_id     TEXT NOT NULL,
+                    variant     TEXT NOT NULL,
+                    source      TEXT NOT NULL DEFAULT 'tcgplayer',
+                    currency    TEXT NOT NULL DEFAULT 'USD',
+                    captured_on TEXT NOT NULL,
+                    market      REAL,
+                    low         REAL,
+                    mid         REAL,
+                    high        REAL,
+                    PRIMARY KEY (card_id, variant, source, captured_on)
+                );
+
+                INSERT INTO price_history_new
+                    (card_id, variant, source, currency, captured_on, market, low, mid, high)
+                SELECT card_id, variant, 'tcgplayer', 'USD', captured_on, market, low, mid, high
+                FROM price_history;
+
+                DROP TABLE price_history;
+                ALTER TABLE price_history_new RENAME TO price_history;
+                """;
+            cmd.ExecuteNonQuery();
+        }
+
+        tx.Commit();
     }
 
     private static void AddColumn(SqliteConnection conn, string table, string column, string definition)

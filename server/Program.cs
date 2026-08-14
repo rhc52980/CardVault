@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Diagnostics;
 using CardVault.Data;
 using CardVault.Models;
 using CardVault.Services;
+using CardVault.Services.PriceSources;
 
 // Content root, which decides where wwwroot and appsettings are found.
 //
@@ -61,6 +62,11 @@ builder.Services.AddSingleton<BackupService>();
 builder.Services.AddHttpClient<PokemonTcgClient>(c => c.Timeout = TimeSpan.FromSeconds(30));
 
 builder.Services.AddHttpClient<ImageCache>(c => c.Timeout = TimeSpan.FromSeconds(30));
+
+// Price sources. Registration order is the preference order used for valuation
+// when no source is chosen in Settings. Adding a market means adding a line here.
+builder.Services.AddSingleton<IPriceSource, TcgPlayerPriceSource>();
+builder.Services.AddSingleton<IPriceSource, CardmarketPriceSource>();
 
 builder.Services.AddSingleton<PriceSnapshotService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<PriceSnapshotService>());
@@ -240,10 +246,7 @@ app.MapGet("/api/cards/{id}", async (string id, PokemonTcgClient api, CardCache 
 app.MapGet("/api/cards/{id}/history", (
     string id, PriceSnapshotService snapshots, CollectionService collection) =>
 {
-    var series = snapshots.HistoryFor(id)
-        .Select(kv => new PriceSeries(kv.Key, kv.Value))
-        .OrderBy(s => s.Variant)
-        .ToList();
+    var series = snapshots.HistoryFor(id);
 
     var owned = collection.List()
         .Where(i => i.CardId == id)
@@ -578,6 +581,25 @@ app.MapPost("/api/custom", async (HttpRequest request, CustomItemService custom,
 
     var (cardId, entryId) = await custom.CreateAsync(req, image, ct);
     return Results.Created($"/api/collection/{entryId}", new { cardId, entryId });
+});
+
+app.MapGet("/api/prices/sources", (PriceSnapshotService snapshots, SettingsService settings) => Results.Ok(new
+{
+    sources = snapshots.Sources(),
+    // Which market drives valuation. Never a blend: the sources report different
+    // currencies, so combining them would produce a meaningless number.
+    preferred = settings.PreferredPriceSource,
+}));
+
+app.MapPut("/api/prices/sources/preferred", (
+    PreferredSourceRequest req, PriceSnapshotService snapshots, SettingsService settings) =>
+{
+    var known = snapshots.Sources().Select(s => s.Id).ToHashSet();
+    if (req.Source is null || !known.Contains(req.Source))
+        return Results.BadRequest(new { error = "Unknown price source." });
+
+    settings.PreferredPriceSource = req.Source;
+    return Results.Ok(new { preferred = settings.PreferredPriceSource });
 });
 
 app.MapPost("/api/prices/snapshot", async (PriceSnapshotService snapshots, CancellationToken ct) =>

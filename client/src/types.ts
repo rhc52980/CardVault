@@ -132,7 +132,23 @@ export interface PricePoint {
 
 export interface PriceSeries {
   variant: string
+  source: string
+  sourceName: string
+  /** Different markets in different money — never compare figures across them. */
+  currency: string
   points: PricePoint[]
+}
+
+export interface PriceSourceInfo {
+  id: string
+  name: string
+  currency: string
+}
+
+export interface PriceSourceSettings {
+  sources: PriceSourceInfo[]
+  /** The single market that drives valuation. */
+  preferred: string
 }
 
 export interface CardHistory {
