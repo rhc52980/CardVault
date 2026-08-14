@@ -12,6 +12,12 @@ interface Props {
    * Pass the string — the styling lives here so every grid prices the same way.
    */
   price?: ReactNode
+  /**
+   * A third line under the subtitle, for something worth seeing without hovering.
+   * The vault uses it for cost and profit; grids with no purchase price omit it
+   * and keep the tile at two lines.
+   */
+  note?: ReactNode
   footer?: ReactNode
   onClick?: () => void
 }
@@ -21,7 +27,17 @@ interface Props {
  * it — the effect real cards have under a light, which makes a wall of flat images
  * feel like a binder page.
  */
-export function CardTile({ image, fallbackImage, name, subtitle, badge, price, footer, onClick }: Props) {
+export function CardTile({
+  image,
+  fallbackImage,
+  name,
+  subtitle,
+  badge,
+  price,
+  note,
+  footer,
+  onClick,
+}: Props) {
   const ref = useRef<HTMLDivElement>(null)
   const [loaded, setLoaded] = useState(false)
   const [failed, setFailed] = useState(false)
@@ -113,6 +129,7 @@ export function CardTile({ image, fallbackImage, name, subtitle, badge, price, f
           )}
         </div>
         {subtitle && <div className="mt-0.5 truncate text-xs text-mute">{subtitle}</div>}
+        {note && <div className="mt-0.5 truncate text-xs tabular-nums">{note}</div>}
       </div>
     </div>
   )

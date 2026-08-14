@@ -95,7 +95,6 @@ public sealed class CollectionService(Db db, SettingsService settings, IEnumerab
         Set("variant", "variant", req.Variant);
         Set("condition", "condition", req.Condition);
         Set("grade", "grade", req.Grade);
-        Set("purchase_price", "purchasePrice", req.PurchasePrice);
         Set("purchase_date", "purchaseDate", req.PurchaseDate);
         Set("notes", "notes", req.Notes);
 
@@ -110,6 +109,11 @@ public sealed class CollectionService(Db db, SettingsService settings, IEnumerab
         // otherwise you could never go back to tracking market price.
         if (req.ClearManualValue) sets.Add("manual_value = NULL");
         else Set("manual_value", "manualValue", req.ManualValue);
+
+        // Same for what was paid — without a flag, a figure entered by mistake
+        // could be changed but never removed.
+        if (req.ClearPurchasePrice) sets.Add("purchase_price = NULL");
+        else Set("purchase_price", "purchasePrice", req.PurchasePrice);
 
         if (sets.Count == 0) return true;
 

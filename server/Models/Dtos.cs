@@ -23,7 +23,13 @@ public sealed record UpdateEntryRequest(
     double? ManualValue = null,
     string? Location = null,
     /// <summary>Set true to clear a manual value and fall back to market price.</summary>
-    bool ClearManualValue = false);
+    bool ClearManualValue = false,
+    /// <summary>
+    /// Set true to forget what was paid. Needs its own flag for the same reason as
+    /// the manual value: a null price means "leave alone", so without this there is
+    /// no way to undo a figure entered by mistake.
+    /// </summary>
+    bool ClearPurchasePrice = false);
 
 /// <summary>
 /// Something the catalogue doesn't have — a booster box, an ETB, a Japanese

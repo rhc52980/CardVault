@@ -213,6 +213,8 @@ function OwnedRow({ entry, onChanged }: { entry: CollectionItem; onChanged: () =
   const [draftValue, setDraftValue] = useState(String(entry.manualValue ?? ''))
   const [editingLocation, setEditingLocation] = useState(false)
   const [draftLocation, setDraftLocation] = useState(entry.location ?? '')
+  const [editingPaid, setEditingPaid] = useState(false)
+  const [draftPaid, setDraftPaid] = useState(String(entry.purchasePrice ?? ''))
 
   async function saveLocation() {
     setBusy(true)
@@ -231,6 +233,30 @@ function OwnedRow({ entry, onChanged }: { entry: CollectionItem; onChanged: () =
       const trimmed = draftValue.trim()
       await api.update(entry.id, trimmed === '' ? { clearManualValue: true } : { manualValue: Number(trimmed) })
       setEditingValue(false)
+      onChanged()
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  /**
+   * What the card cost. Only settable at the moment of adding until now, which
+   * meant a price typed wrong, or left blank in a hurry, could only be corrected
+   * by deleting the entry and adding it again — losing everything else recorded
+   * against it.
+   *
+   * Blank clears it, and the card goes back to showing no profit rather than a
+   * profit of its full value.
+   */
+  async function savePaid() {
+    setBusy(true)
+    try {
+      const trimmed = draftPaid.trim()
+      await api.update(
+        entry.id,
+        trimmed === '' ? { clearPurchasePrice: true } : { purchasePrice: Number(trimmed) },
+      )
+      setEditingPaid(false)
       onChanged()
     } finally {
       setBusy(false)
@@ -328,6 +354,48 @@ function OwnedRow({ entry, onChanged }: { entry: CollectionItem; onChanged: () =
             className="mt-1 text-xs text-arc transition hover:underline"
           >
             {entry.manualValue != null ? 'Edit your value' : 'Set your own value'}
+          </button>
+        )}
+
+        {editingPaid ? (
+          <div className="mt-2 flex items-center gap-2">
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              autoFocus
+              value={draftPaid}
+              onChange={(e) => setDraftPaid(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') void savePaid()
+                if (e.key === 'Escape') setEditingPaid(false)
+              }}
+              placeholder="Leave blank if unknown"
+              className="w-48 rounded-md border border-edge bg-abyss px-2 py-1 text-xs text-bright outline-none focus:border-arc"
+            />
+            <button
+              onClick={savePaid}
+              disabled={busy}
+              className="rounded-md bg-arc px-2.5 py-1 text-xs text-white transition hover:brightness-110 disabled:opacity-40"
+            >
+              Save
+            </button>
+            <button
+              onClick={() => setEditingPaid(false)}
+              className="rounded-md px-2 py-1 text-xs text-mute transition hover:text-bright"
+            >
+              Cancel
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => {
+              setDraftPaid(String(entry.purchasePrice ?? ''))
+              setEditingPaid(true)
+            }}
+            className="mt-1 block text-xs text-arc transition hover:underline"
+          >
+            {entry.purchasePrice != null ? 'Edit what you paid' : 'Record what you paid'}
           </button>
         )}
 
