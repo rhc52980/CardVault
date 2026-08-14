@@ -6,6 +6,7 @@ import type {
   AuthStatus,
   BackupInfo,
   CardHistory,
+  CatalogueStatus,
   CollectionItem,
   CollectionStats,
   CustomItemRequest,
@@ -259,6 +260,30 @@ export const api = {
 
   setUpdateCheck(enabled: boolean) {
     return post<UpdateStatus>('/api/settings/update-check', { enabled })
+  },
+
+  catalogue() {
+    return fetch('/api/catalogue').then(json<CatalogueStatus>)
+  },
+
+  downloadCatalogue(includeImages: boolean) {
+    return post<CatalogueStatus>('/api/catalogue/download', { includeImages })
+  },
+
+  cancelCatalogue() {
+    return post<CatalogueStatus>('/api/catalogue/cancel', {})
+  },
+
+  setCatalogueEnabled(enabled: boolean) {
+    return fetch('/api/catalogue/enabled', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled }),
+    }).then(json<CatalogueStatus>)
+  },
+
+  deleteCatalogue() {
+    return fetch('/api/catalogue', { method: 'DELETE' }).then(json<CatalogueStatus>)
   },
 
   createBackup() {

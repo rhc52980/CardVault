@@ -34,6 +34,21 @@
     <InternalsVisibleTo Include="CardVault.Tests" />
   </ItemGroup>
 
+  <!-- WebP encoding for the offline catalogue. Card art arrives as barely-compressed
+       PNG (~153 KB for a 240x330 thumbnail); re-encoded to WebP the whole catalogue
+       drops from roughly 3 GB to a few hundred MB, at a size no one can see at the
+       dimensions the grid draws.
+
+       SkiaSharp rather than ImageSharp: ImageSharp 4.0 enforces a build-time licence
+       key file for direct dependencies, which this project would qualify for free but
+       which would stop anyone cloning the repo from building it. The NoDependencies
+       Linux assets are the right variant here because we only decode and encode
+       images and never render text, so the server needs no fontconfig. -->
+  <ItemGroup>
+    <PackageReference Include="SkiaSharp" Version="3.119.0" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="3.119.0" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.11" />
     <PackageReference Include="Microsoft.Extensions.Hosting.Systemd" Version="10.0.11" />

@@ -60,6 +60,42 @@ public static class Pricing
         return new PriceSet(Num(entry, "market"), Num(entry, "low"), Num(entry, "mid"), Num(entry, "high"));
     }
 
+    /// <summary>
+    /// The printings a card probably has, guessed from its rarity and age.
+    ///
+    /// Needed only for the offline catalogue. Everywhere else the printing list comes
+    /// from the keys of the TCGplayer price block, which is authoritative — but the
+    /// bulk catalogue data has no price block at all, so a card added while offline
+    /// has nothing to offer you. Rather than an empty dropdown, this offers the
+    /// printings that rarity and era make likely.
+    ///
+    /// It is a guess and is treated as one: the daily price refresh re-fetches every
+    /// owned card and replaces this with the real list, so being wrong costs a day of
+    /// showing one extra option rather than anything permanent.
+    /// </summary>
+    public static IReadOnlyList<string> LikelyVariants(string? rarity, string? releaseDate)
+    {
+        // "Double Rare" and "Triple Rare" are the Scarlet & Violet era's names for ex
+        // cards, which are always foil and never come in a plain printing — without
+        // them an ex would be offered as "normal", which is not a card that exists.
+        string[] foilRarities =
+        [
+            "Holo", "Secret", "Ultra", "Illustration", "Hyper",
+            "Double", "Triple", "Shiny", "Radiant", "Amazing", "LEGEND", "Prime",
+        ];
+
+        var holo = rarity is not null
+                   && foilRarities.Any(f => rarity.Contains(f, StringComparison.OrdinalIgnoreCase));
+
+        // Reverse holos arrive with Legendary Collection in 2002. Offering one for a
+        // Base Set card would be offering a printing that has never existed.
+        var reverseHolosExist =
+            DateTime.TryParse(releaseDate, out var released) && released >= new DateTime(2002, 5, 1);
+
+        if (holo) return reverseHolosExist ? ["holofoil", "reverseHolofoil"] : ["holofoil"];
+        return reverseHolosExist ? ["normal", "reverseHolofoil"] : ["normal"];
+    }
+
     /// <summary>European prices from Cardmarket, shown alongside the USD figures.</summary>
     public static double? CardmarketTrend(JsonElement card)
         => card.TryGetProperty("cardmarket", out var cm)

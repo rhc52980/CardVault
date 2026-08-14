@@ -244,6 +244,24 @@ export interface ApiKeyStatus {
   source: string
 }
 
+/** Progress of a running catalogue download. State drives what the panel shows. */
+export interface CatalogueProgress {
+  state: 'sets' | 'images' | 'done' | 'failed' | 'cancelled'
+  done: number
+  total: number
+  detail?: string | null
+  error?: string | null
+}
+
+export interface CatalogueStatus {
+  enabled: boolean
+  cards: number
+  images: number
+  imageBytes: number
+  downloadedAt?: string | null
+  progress?: CatalogueProgress | null
+}
+
 export interface BackupInfo {
   name: string
   sizeBytes: number

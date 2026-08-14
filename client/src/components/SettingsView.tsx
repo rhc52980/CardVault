@@ -1,6 +1,12 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api'
-import type { AppSettings, AuthStatus, PriceSourceSettings, SessionInfo } from '../types'
+import type {
+  AppSettings,
+  AuthStatus,
+  CatalogueStatus,
+  PriceSourceSettings,
+  SessionInfo,
+} from '../types'
 
 const field =
   'w-full rounded-lg border border-edge bg-abyss px-3 py-2 text-sm text-bright outline-none focus:border-arc focus:ring-1 focus:ring-arc'
@@ -41,6 +47,7 @@ export function SettingsView({ onAuthChanged }: { onAuthChanged: () => void }) {
       <SecurityCard onAuthChanged={onAuthChanged} />
       <ApiKeyCard settings={settings} onChanged={load} />
       <EbayCard settings={settings} onChanged={load} />
+      <CatalogueCard />
       <DataCard settings={settings} />
       <BackupsCard settings={settings} onChanged={load} />
     </div>
@@ -625,6 +632,173 @@ function EbayCard({ settings, onChanged }: { settings: AppSettings; onChanged: (
       <p className="mt-2 text-xs text-mute">
         A value you've typed in yourself still wins over anything fetched here — clear it on the
         item to fall back to the tracked price.
+      </p>
+    </section>
+  )
+}
+
+// ------------------------------------------------------- offline card catalogue
+
+function CatalogueCard() {
+  const [status, setStatus] = useState<CatalogueStatus | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+
+  const load = () => api.catalogue().then(setStatus).catch(() => {})
+
+  useEffect(() => {
+    void load()
+  }, [])
+
+  const running = status?.progress?.state === 'sets' || status?.progress?.state === 'images'
+
+  // Poll only while something is actually running. A settings page has no business
+  // making a request every second forever.
+  useEffect(() => {
+    if (!running) return
+    const id = setInterval(() => void load(), 1000)
+    return () => clearInterval(id)
+  }, [running])
+
+  async function run(action: () => Promise<CatalogueStatus>) {
+    setBusy(true)
+    try {
+      setStatus(await action())
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (!status) return <div className="skeleton h-40 rounded-xl" />
+
+  const progress = status.progress
+  const pct = progress && progress.total > 0 ? Math.round((progress.done / progress.total) * 100) : 0
+  const downloaded = status.cards > 0
+
+  return (
+    <section className="panel rounded-xl p-4">
+      <h2 className="font-medium text-bright">Offline card catalogue</h2>
+      <p className="mt-1 text-sm text-mute">
+        Keeps every card and its thumbnail on this machine, so finding a card to add never waits
+        on pokemontcg.io. It holds no prices — those still come from the price sources on their
+        own daily schedule, and nothing here has an opinion about what a card is worth.
+      </p>
+
+      <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg bg-white/[0.03] px-3 py-2 text-sm">
+        <span className={downloaded ? 'text-mint' : 'text-gold'}>
+          {downloaded ? '● Downloaded' : '○ Not downloaded'}
+        </span>
+        {downloaded && (
+          <span className="text-xs text-mute">
+            · {status.cards.toLocaleString()} cards · {status.images.toLocaleString()} images ·{' '}
+            {bytes(status.imageBytes)}
+          </span>
+        )}
+        {status.downloadedAt && <span className="text-xs text-mute">· {when(status.downloadedAt)}</span>}
+      </div>
+
+      {progress && (
+        <div className="mt-3">
+          <div className="flex items-baseline justify-between gap-3 text-xs text-mute">
+            <span className="truncate">
+              {progress.state === 'sets' && 'Fetching card data'}
+              {progress.state === 'images' && 'Downloading artwork'}
+              {progress.state === 'done' && 'Finished'}
+              {progress.state === 'cancelled' && 'Stopped'}
+              {progress.state === 'failed' && <span className="text-rose">Failed</span>}
+              {progress.detail ? ` · ${progress.detail}` : ''}
+            </span>
+            {progress.total > 0 && (
+              <span className="shrink-0 tabular-nums">
+                {progress.done.toLocaleString()} / {progress.total.toLocaleString()}
+              </span>
+            )}
+          </div>
+          {running && (
+            <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-white/10">
+              <div className="h-full rounded-full bg-arc transition-all" style={{ width: `${pct}%` }} />
+            </div>
+          )}
+          {progress.error && <p className="mt-1 text-sm text-rose">{progress.error}</p>}
+        </div>
+      )}
+
+      <div className="mt-3 flex flex-wrap gap-2">
+        {running ? (
+          <button
+            onClick={() => run(api.cancelCatalogue)}
+            disabled={busy}
+            className="rounded-lg border border-edge px-4 py-2 text-sm text-mute transition hover:text-rose disabled:opacity-40"
+          >
+            Stop
+          </button>
+        ) : (
+          <button
+            onClick={() => run(() => api.downloadCatalogue(true))}
+            disabled={busy}
+            className="rounded-lg bg-arc px-4 py-2 text-sm font-medium text-white transition hover:brightness-110 disabled:opacity-40"
+          >
+            {downloaded ? 'Download again' : 'Download catalogue'}
+          </button>
+        )}
+
+        {downloaded && !running && !confirmDelete && (
+          <button
+            onClick={() => setConfirmDelete(true)}
+            disabled={busy}
+            className="rounded-lg border border-edge px-4 py-2 text-sm text-mute transition hover:text-rose disabled:opacity-40"
+          >
+            Delete
+          </button>
+        )}
+
+        {confirmDelete && (
+          <>
+            <button
+              onClick={async () => {
+                setConfirmDelete(false)
+                await run(api.deleteCatalogue)
+              }}
+              disabled={busy}
+              className="rounded-lg bg-rose px-4 py-2 text-sm font-medium text-white transition hover:brightness-110 disabled:opacity-40"
+            >
+              Delete it
+            </button>
+            <button
+              onClick={() => setConfirmDelete(false)}
+              className="rounded-lg border border-edge px-4 py-2 text-sm text-mute transition hover:text-bright"
+            >
+              Keep it
+            </button>
+          </>
+        )}
+      </div>
+
+      <label className="mt-3 flex items-start gap-2 text-sm text-mute">
+        <input
+          type="checkbox"
+          checked={status.enabled}
+          disabled={busy}
+          onChange={(e) => run(() => api.setCatalogueEnabled(e.target.checked))}
+          className="mt-0.5 h-4 w-4 accent-[color:var(--color-arc)]"
+        />
+        <span>
+          Use it when adding cards
+          <span className="block text-xs">
+            Searching reads this machine instead of the API. Turn it off to go back to live results
+            without deleting anything, and it stays inactive on its own until a catalogue has
+            actually been downloaded.
+          </span>
+        </span>
+      </label>
+
+      <p className="mt-3 text-xs text-mute">
+        Around 415 MB and a couple of minutes on a decent connection. Thumbnails are re-encoded to
+        WebP on the way in, which is what turns roughly 3 GB of source PNGs into that.
+      </p>
+      <p className="mt-2 text-xs text-mute">
+        A card added from here arrives with no price and its most likely printing. The daily price
+        refresh re-fetches everything you own, so both are corrected on its next run.
       </p>
     </section>
   )
