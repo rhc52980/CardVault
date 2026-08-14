@@ -186,6 +186,14 @@ export function CollectionView({
         >
           JSON
         </a>
+        <a
+          href="/api/export/deck-inventory.json"
+          download
+          className="rounded-lg border border-edge px-3 py-2 text-mute transition hover:border-arc/60 hover:text-bright"
+          title="Your playable cards with energy costs, evolution lines and format legality — the file to hand an AI for deck building"
+        >
+          Deck inventory
+        </a>
       </div>
     </div>
   )
