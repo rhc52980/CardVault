@@ -7,7 +7,11 @@ interface Props {
   name: string
   subtitle?: ReactNode
   badge?: ReactNode
-  corner?: ReactNode
+  /**
+   * Already-formatted money, shown beside the name rather than over the artwork.
+   * Pass the string — the styling lives here so every grid prices the same way.
+   */
+  price?: ReactNode
   footer?: ReactNode
   onClick?: () => void
 }
@@ -17,7 +21,7 @@ interface Props {
  * it — the effect real cards have under a light, which makes a wall of flat images
  * feel like a binder page.
  */
-export function CardTile({ image, fallbackImage, name, subtitle, badge, corner, footer, onClick }: Props) {
+export function CardTile({ image, fallbackImage, name, subtitle, badge, price, footer, onClick }: Props) {
   const ref = useRef<HTMLDivElement>(null)
   const [loaded, setLoaded] = useState(false)
   const [failed, setFailed] = useState(false)
@@ -87,7 +91,6 @@ export function CardTile({ image, fallbackImage, name, subtitle, badge, corner, 
         )}
 
         {badge && <div className="absolute top-2 left-2 z-10">{badge}</div>}
-        {corner && <div className="absolute top-2 right-2 z-10">{corner}</div>}
 
         {footer && (
           <div className="absolute inset-x-0 bottom-0 z-10 translate-y-full bg-gradient-to-t from-black/95 via-black/80 to-transparent p-2 transition-transform duration-200 group-hover:translate-y-0">
@@ -97,8 +100,17 @@ export function CardTile({ image, fallbackImage, name, subtitle, badge, corner, 
       </div>
 
       <div className="mt-2 px-0.5">
-        <div className="truncate text-sm font-medium text-bright" title={name}>
-          {name}
+        {/* Price sits beside the name, not over the artwork. As a pill on the card
+            it covered the art at the top right — usually the holo pattern or the
+            HP — and had to fight a busy image for legibility at 11px. Down here it
+            reads against a flat background and can be a proper size. */}
+        <div className="flex items-baseline gap-2">
+          <div className="min-w-0 flex-1 truncate text-sm font-medium text-bright" title={name}>
+            {name}
+          </div>
+          {price != null && (
+            <div className="shrink-0 text-sm font-semibold text-gold tabular-nums">{price}</div>
+          )}
         </div>
         {subtitle && <div className="mt-0.5 truncate text-xs text-mute">{subtitle}</div>}
       </div>
