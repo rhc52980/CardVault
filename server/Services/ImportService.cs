@@ -161,6 +161,24 @@ public sealed class ImportService(
             Location = Get("location"),
         };
 
+        // A number column written the way the card prints it — "45/094", or any of
+        // the forms the search box takes. Parsed through the very same code, so a
+        // spreadsheet and the search box can't drift apart on what a number means.
+        //
+        // Without this the cell arrives as the literal text "45/094", which matches
+        // no card at all; and stripped to just "45" it would match card 45 in
+        // practically every set ever printed. The denominator is what makes a
+        // column of bare numbers usable.
+        if (row.Number is { } typed)
+        {
+            var intent = SearchQuery.Parse(typed, null);
+            if (intent.Number is { } parsed)
+            {
+                row.Number = parsed;
+                row.PrintedTotal = intent.PrintedTotal;
+            }
+        }
+
         // Held separately from the resolved card's own values until we match it.
         row.Variant = NormalizeVariant(Get("variant"));
         return row;
@@ -206,11 +224,30 @@ public sealed class ImportService(
         }
 
         // 2. Try the local cache before touching the network.
-        var local = cache.FindPayloads(setId, row.Number, setId is null ? row.Name : null);
+        //
+        // Only when the row says something about which card it means beyond a bare
+        // number. The cache holds whatever happens to have been seen before, so one
+        // hit in it does not mean one card exists: a row reading only "45" would
+        // match whichever card numbered 45 had been cached first and import it
+        // silently, which is a far worse outcome than asking the API. A number
+        // written "45/094" is specific enough, because the denominator names the
+        // set as surely as spelling it out.
+        var identifiable = setId is not null
+                           || setCode is not null
+                           || row.SetName is not null
+                           || row.Name is not null
+                           || row.PrintedTotal is not null;
+
+        var local = identifiable
+            ? cache.FindPayloads(setId, row.Number, setId is null ? row.Name : null)
+            : [];
+
         if (local.Count > 0)
         {
             var candidates = local.Select(ToCandidate).ToList();
-            var narrowed = NarrowBySetName(NarrowByName(candidates, row.Name), row.SetName);
+            var narrowed = NarrowBySetName(
+                NarrowByName(NarrowByPrintedTotal(candidates, row.PrintedTotal), row.Name),
+                row.SetName);
             if (narrowed.Count == 1)
             {
                 Apply(row, narrowed[0]);
@@ -222,10 +259,26 @@ public sealed class ImportService(
         var queries = new List<string>();
         if (setId is not null && row.Number is not null) queries.Add($"set.id:{Escape(setId)} number:{Escape(row.Number)}");
         if (setCode is not null && row.Number is not null) queries.Add($"set.ptcgoCode:{Escape(setCode)} number:{Escape(row.Number)}");
+
+        // The denominator narrows to the handful of sets of that exact size, which
+        // for a bare "45/094" is the difference between one card and one per set.
+        // Placed above the name forms because it is more precise than either.
+        if (row.PrintedTotal is { } printedTotal && row.Number is not null)
+        {
+            if (row.Name is not null)
+                queries.Add($"name:\"*{Escape(row.Name)}*\" number:{Escape(row.Number)} set.printedTotal:{printedTotal}");
+            queries.Add($"number:{Escape(row.Number)} set.printedTotal:{printedTotal}");
+        }
+
         if (row.SetName is not null && row.Number is not null) queries.Add($"set.name:\"{Escape(row.SetName)}\" number:{Escape(row.Number)}");
         if (row.Name is not null && row.Number is not null) queries.Add($"name:\"*{Escape(row.Name)}*\" number:{Escape(row.Number)}");
         if (row.Name is not null && row.SetName is not null) queries.Add($"name:\"*{Escape(row.Name)}*\" set.name:\"{Escape(row.SetName)}\"");
         if (row.Name is not null) queries.Add($"name:\"*{Escape(row.Name)}*\"");
+
+        // Last resort: a number and nothing else. It will match that number in many
+        // sets, which is the point — the row comes back as a choice to make rather
+        // than as "not found", which would be untrue since nothing was ever asked.
+        if (row.Name is null && row.Number is not null) queries.Add($"number:{Escape(row.Number)}");
 
         var lookupFailed = false;
 
@@ -258,7 +311,9 @@ public sealed class ImportService(
             }
 
             var candidates = payloads.Select(ToCandidate).ToList();
-            var narrowed = NarrowBySetName(NarrowByName(candidates, row.Name), row.SetName);
+            var narrowed = NarrowBySetName(
+                NarrowByName(NarrowByPrintedTotal(candidates, row.PrintedTotal), row.Name),
+                row.SetName);
 
             if (narrowed.Count == 1)
             {
@@ -306,6 +361,26 @@ public sealed class ImportService(
     /// "Blaine's Charizard" and "Dark Charizard". When the CSV gave us a name,
     /// prefer exact matches so those near-misses don't make every row ambiguous.
     /// </summary>
+    /// <summary>
+    /// Keeps only cards from a set of exactly that size.
+    ///
+    /// This is the whole value of writing a number as "45/094": card 45 exists in
+    /// very nearly every set ever printed, and the denominator cuts that to the few
+    /// sets that are 94 cards long. Applied before name and set-name narrowing
+    /// because it is the strongest signal of the three and needs nothing else in
+    /// the row to work.
+    /// </summary>
+    private static List<CardCandidate> NarrowByPrintedTotal(List<CardCandidate> candidates, int? total)
+    {
+        if (candidates.Count <= 1 || total is null) return candidates;
+
+        var matching = candidates.Where(c => c.PrintedTotal == total).ToList();
+
+        // If nothing matches, the denominator was wrong or the set isn't known —
+        // better to fall back to the wider list than to reject the row outright.
+        return matching.Count > 0 ? matching : candidates;
+    }
+
     private static List<CardCandidate> NarrowByName(List<CardCandidate> candidates, string? name)
     {
         if (candidates.Count <= 1 || string.IsNullOrWhiteSpace(name)) return candidates;
@@ -372,7 +447,12 @@ public sealed class ImportService(
             Rarity: Text(card, "rarity"),
             ImageSmall: Text(images, "small"),
             MarketPrice: price.Market,
-            Variants: Pricing.AvailableVariants(card));
+            Variants: Pricing.AvailableVariants(card),
+            PrintedTotal: set.ValueKind == JsonValueKind.Object
+                          && set.TryGetProperty("printedTotal", out var pt)
+                          && pt.ValueKind == JsonValueKind.Number
+                ? pt.GetInt32()
+                : null);
 
         static string? Text(JsonElement el, string prop)
             => el.ValueKind == JsonValueKind.Object
