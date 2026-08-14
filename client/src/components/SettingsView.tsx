@@ -57,6 +57,7 @@ export function SettingsView({ onAuthChanged }: { onAuthChanged: () => void }) {
       <SecurityCard onAuthChanged={onAuthChanged} />
       <ApiKeyCard settings={settings} onChanged={load} />
       <EbayCard settings={settings} onChanged={load} />
+      <ScrydexCard settings={settings} onChanged={load} />
       <CatalogueCard />
       <DataCard settings={settings} />
       <BackupsCard settings={settings} onChanged={load} />
@@ -736,6 +737,133 @@ function EbayCard({ settings, onChanged }: { settings: AppSettings; onChanged: (
       <p className="mt-2 text-xs text-mute">
         A value you've typed in yourself still wins over anything fetched here — clear it on the
         item to fall back to the tracked price.
+      </p>
+    </section>
+  )
+}
+
+// ------------------------------------------------------------------- Scrydex
+
+function ScrydexCard({ settings, onChanged }: { settings: AppSettings; onChanged: () => void }) {
+  const [apiKey, setApiKey] = useState('')
+  const [teamId, setTeamId] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [message, setMessage] = useState<{ kind: 'ok' | 'warn' | 'error'; text: string } | null>(null)
+
+  const ready = apiKey.trim() !== '' && teamId.trim() !== ''
+
+  async function save() {
+    if (!ready) return
+    setBusy(true)
+    setMessage(null)
+    try {
+      const res = await api.saveScrydexCredentials(apiKey.trim(), teamId.trim())
+      setApiKey('')
+      setTeamId('')
+      setMessage(
+        res.reachable
+          ? { kind: 'ok', text: 'Saved, and Scrydex accepted the credentials.' }
+          : {
+              kind: 'warn',
+              text: 'Saved, but Scrydex rejected them. Check the API key and Team ID are both from ' +
+                'the same subscription.',
+            },
+      )
+      onChanged()
+    } catch (e) {
+      setMessage({ kind: 'error', text: e instanceof Error ? e.message : 'Could not save those credentials' })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function clear() {
+    setBusy(true)
+    setMessage(null)
+    try {
+      await api.clearScrydexCredentials()
+      setMessage({ kind: 'ok', text: 'Saved credentials removed.' })
+      onChanged()
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const status = settings.scrydex
+
+  return (
+    <section className="panel rounded-xl p-4">
+      <h2 className="font-medium text-bright">Japanese cards (Scrydex)</h2>
+      <p className="mt-1 text-sm text-mute">
+        pokemontcg.io is English only, so a Japanese card can otherwise only be typed in by hand
+        with no number, no set and no image. Scrydex carries both languages as a proper catalogue
+        with prices attached, which lets a Japanese card behave like any other. Keys come from{' '}
+        <a href="https://scrydex.com" target="_blank" rel="noreferrer" className="text-arc hover:underline">
+          scrydex.com
+        </a>
+        , under a paid subscription.
+      </p>
+
+      <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg bg-white/[0.03] px-3 py-2 text-sm">
+        <span className={status.configured ? 'text-mint' : 'text-gold'}>
+          {status.configured ? '● Credentials configured' : '○ Not set'}
+        </span>
+        {status.masked && <code className="font-mono text-xs text-mute">{status.masked}</code>}
+        <span className="text-xs text-mute">· {status.source}</span>
+      </div>
+
+      <div className="mt-3 space-y-2">
+        <input
+          type="password"
+          value={apiKey}
+          onChange={(e) => setApiKey(e.target.value)}
+          placeholder="API key"
+          className={`${field} w-full font-mono`}
+          autoComplete="off"
+        />
+        <input
+          type="text"
+          value={teamId}
+          onChange={(e) => setTeamId(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && save()}
+          placeholder="Team ID"
+          className={`${field} w-full font-mono`}
+          autoComplete="off"
+        />
+      </div>
+
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button
+          onClick={save}
+          disabled={busy || !ready}
+          className="rounded-lg bg-arc px-4 py-2 text-sm font-medium text-white transition hover:brightness-110 disabled:opacity-40"
+        >
+          {busy ? 'Saving…' : 'Save credentials'}
+        </button>
+        {status.configured && status.source === 'Saved in this app' && (
+          <button
+            onClick={clear}
+            disabled={busy}
+            className="rounded-lg border border-edge px-4 py-2 text-sm text-mute transition hover:text-rose disabled:opacity-40"
+          >
+            Remove
+          </button>
+        )}
+      </div>
+
+      {message && (
+        <p
+          className={`mt-2 text-sm ${
+            message.kind === 'ok' ? 'text-mint' : message.kind === 'warn' ? 'text-gold' : 'text-rose'
+          }`}
+        >
+          {message.text}
+        </p>
+      )}
+
+      <p className="mt-3 text-xs text-mute">
+        Both values come from the same subscription and both are sent on every request, so neither
+        works alone. Saving checks them against Scrydex rather than just storing them.
       </p>
     </section>
   )

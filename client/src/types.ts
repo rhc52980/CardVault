@@ -294,6 +294,8 @@ export interface AppSettings {
   apiKey: ApiKeyStatus
   /** eBay credentials. Only the App ID is ever echoed back, and masked at that. */
   ebay: ApiKeyStatus
+  /** Scrydex credentials, for Japanese cards. Only the API key is echoed, masked. */
+  scrydex: ApiKeyStatus
   dataDirectory: string
   migratedFromLegacy: boolean
   legacyDirectory: string

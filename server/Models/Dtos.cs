@@ -136,6 +136,9 @@ public sealed record ApiKeyRequest(string? ApiKey);
 /// <summary>eBay application credentials, entered together since neither works alone.</summary>
 public sealed record EbayCredentialsRequest(string? ClientId, string? ClientSecret);
 
+/// <summary>Scrydex credentials — both headers ride on every request.</summary>
+public sealed record ScrydexCredentialsRequest(string? ApiKey, string? TeamId);
+
 /// <summary>
 /// A card from the offline catalogue. No price field, and that is not an oversight:
 /// the source data carries no prices at all, and this exists to find a card rather
