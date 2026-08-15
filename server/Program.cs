@@ -822,8 +822,11 @@ app.MapGet("/api/import/{jobId}", (string jobId, ImportService import)
 app.MapPost("/api/import/{jobId}/commit", (string jobId, CommitRequest req, ImportService import) =>
 {
     if (import.Get(jobId) is null) return Results.NotFound();
-    var added = import.Commit(jobId, req.Rows);
-    return Results.Ok(new { added });
+
+    // Returns per-row outcomes as well as the total, so the review list can mark up
+    // the rows that landed rather than leaving you to work out which of a hundred
+    // cards the count is missing.
+    return Results.Ok(import.Commit(jobId, req.Rows));
 });
 
 app.MapGet("/api/import/template", () =>
