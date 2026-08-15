@@ -19,6 +19,7 @@ public sealed class ImportService(
     PokemonTcgClient api,
     CollectionService collection,
     PriceSnapshotService snapshots,
+    ImportBatchService batches,
     IHostApplicationLifetime lifetime,
     ILogger<ImportService> log)
 {
@@ -626,6 +627,10 @@ public sealed class ImportService(
                 seeded.Add(row.CardId);
             }
 
+            // Recorded on the first card that actually lands, so an import that adds
+            // nothing leaves no empty batch behind to be reviewed or undone.
+            if (added == 0) batches.Create(jobId);
+
             collection.Add(new AddEntryRequest(
                 CardId: row.CardId,
                 Quantity: row.Quantity,
@@ -635,7 +640,8 @@ public sealed class ImportService(
                 PurchasePrice: row.PurchasePrice,
                 PurchaseDate: row.PurchaseDate,
                 Notes: row.Notes,
-                Location: row.Location));
+                Location: row.Location),
+                importBatch: jobId);
 
             // Same as a single add: give each imported card a starting price point.
             // A card seeded from the catalogue has no prices to record yet; the pass

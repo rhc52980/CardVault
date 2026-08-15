@@ -19,6 +19,14 @@ interface Props {
    */
   note?: ReactNode
   footer?: ReactNode
+  /**
+   * Marks the tile as needing a look — the vault uses it for cards from an import
+   * you haven't acknowledged yet.
+   *
+   * A ring rather than anything animated: a hundred cards arrive from one import,
+   * and a hundred pulsing tiles would be unreadable and impossible to look past.
+   */
+  highlight?: boolean
   onClick?: () => void
 }
 
@@ -36,6 +44,7 @@ export function CardTile({
   price,
   note,
   footer,
+  highlight,
   onClick,
 }: Props) {
   const ref = useRef<HTMLDivElement>(null)
@@ -81,7 +90,9 @@ export function CardTile({
             onClick()
           }
         }}
-        className="card-tile card-holo relative aspect-[245/342] cursor-pointer overflow-hidden rounded-xl bg-abyss ring-1 ring-white/5 focus:ring-2 focus:ring-arc focus:outline-none"
+        className={`card-tile card-holo relative aspect-[245/342] cursor-pointer overflow-hidden rounded-xl bg-abyss focus:ring-2 focus:ring-arc focus:outline-none ${
+          highlight ? 'shadow-lg shadow-arc/25 ring-2 ring-arc/70' : 'ring-1 ring-white/5'
+        }`}
       >
         {!loaded && !showPlaceholder && <div className="skeleton absolute inset-0 rounded-xl" />}
 
