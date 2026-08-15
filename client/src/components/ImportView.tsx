@@ -36,13 +36,17 @@ const CHOOSABLE: ImportStatus[] = ['Ambiguous', 'Mismatch']
  * card it resolved to — and a thumbnail too small to read the name off defeats the
  * purpose. Large is the default for that reason; small is there for skimming a long
  * file once you already trust the matching.
+ *
+ * Large is deliberately the size a card is drawn at in the vault's own grid (188x262
+ * on a desktop screen), so a card being reviewed and the same card already owned are
+ * the same object at the same size rather than two different-looking things.
  */
 type CardSize = 'small' | 'medium' | 'large'
 
 const CARD_SIZES: { key: CardSize; label: string; className: string }[] = [
   { key: 'small', label: 'Small', className: 'h-16' },
-  { key: 'medium', label: 'Medium', className: 'h-28' },
-  { key: 'large', label: 'Large', className: 'h-44' },
+  { key: 'medium', label: 'Medium', className: 'h-40' },
+  { key: 'large', label: 'Large', className: 'h-64' },
 ]
 
 /** Local editing state layered over what the server resolved. */
@@ -577,7 +581,7 @@ function ImportRowCard({
   const shownName = chosen?.name ?? row.name
   const shownSetName = chosen?.setName ?? row.setName
   const shownNumber = chosen?.number ?? row.number
-  const sizeClass = CARD_SIZES.find((s) => s.key === cardSize)?.className ?? 'h-44'
+  const sizeClass = CARD_SIZES.find((s) => s.key === cardSize)?.className ?? 'h-64'
 
   return (
     <div
