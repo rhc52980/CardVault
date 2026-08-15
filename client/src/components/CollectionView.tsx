@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
-import { cardImage, money } from '../api'
+import { api, cardImage, money } from '../api'
 import { rarityClass } from '../lib/cardStyles'
-import type { CollectionItem } from '../types'
+import type { CollectionItem, ImportBatchSummary } from '../types'
 import { CardDetail } from './CardDetail'
 import { CardTile } from './CardTile'
+import { ConfirmButton } from './ConfirmButton'
 import { ManualEntryDialog } from './ManualEntryDialog'
 import { SoldView } from './SoldView'
 import { WantedView } from './WantedView'
@@ -41,6 +42,36 @@ export function CollectionView({
   // rather than eating another slot in the top nav.
   const [pane, setPane] = useState<'owned' | 'wanted' | 'sold'>('owned')
   const [locationFilter, setLocationFilter] = useState('')
+  const [batchFilter, setBatchFilter] = useState('')
+  const [batches, setBatches] = useState<ImportBatchSummary[]>([])
+
+  // Reloaded whenever the collection is, which covers an import having just added
+  // cards without needing to be told about it separately.
+  useEffect(() => {
+    let live = true
+    api.importBatches()
+      .then((b) => live && setBatches(b))
+      .catch(() => live && setBatches([]))
+    return () => {
+      live = false
+    }
+  }, [items])
+
+  const unreviewed = useMemo(() => batches.filter((b) => !b.acknowledgedAt), [batches])
+  const unreviewedIds = useMemo(() => new Set(unreviewed.map((b) => b.id)), [unreviewed])
+
+  async function acknowledge(id: string) {
+    await api.acknowledgeImport(id)
+    setBatches(await api.importBatches())
+  }
+
+  async function removeBatch(id: string) {
+    await api.removeImport(id)
+    if (batchFilter === id) setBatchFilter('')
+    // The cards are gone, so the collection itself has to be re-read; that in turn
+    // re-runs the effect above and refreshes the batch list.
+    onChanged()
+  }
 
   /**
    * Whether hand-entered things share the grid with the cards.
@@ -98,6 +129,7 @@ export function CollectionView({
     else if (kind === 'hand') out = out.filter((i) => i.isCustom)
 
     if (setFilter_) out = out.filter((i) => i.setId === setFilter_)
+    if (batchFilter) out = out.filter((i) => i.importBatch === batchFilter)
     if (locationFilter) {
       out =
         locationFilter === '__none__'
@@ -122,7 +154,7 @@ export function CollectionView({
       }
     })
     return sorted
-  }, [items, filter, setFilter_, locationFilter, sort, kind])
+  }, [items, filter, setFilter_, locationFilter, batchFilter, sort, kind])
 
   const ownedForDetail = detailCardId ? items.filter((i) => i.cardId === detailCardId) : []
   const visibleValue = visible.reduce((sum, i) => sum + (i.lineValue ?? 0), 0)
@@ -251,6 +283,67 @@ export function CollectionView({
     <div className="space-y-5">
       {header}
 
+      {/* Imports you haven't looked over yet. Stays until acknowledged rather than
+          fading on a timer: the point is to survive closing the tab and still be
+          here tomorrow, so a batch can't be quietly forgotten half-checked. */}
+      {unreviewed.length > 0 && (
+        <div className="panel space-y-2 rounded-xl px-4 py-3">
+          {unreviewed.map((batch) => (
+            <div key={batch.id} className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-sm">
+                <span className="text-bright">
+                  {batch.cards.toLocaleString()} {batch.cards === 1 ? 'card' : 'cards'}
+                </span>
+                <span className="text-mute">
+                  {' '}imported {new Date(batch.createdAt).toLocaleString()} — not checked yet
+                </span>
+                {batch.modified > 0 && (
+                  <span className="text-mute">
+                    {' '}· {batch.modified} edited or partly sold since
+                  </span>
+                )}
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setBatchFilter(batchFilter === batch.id ? '' : batch.id)}
+                  className="rounded-md px-2 py-1 text-xs text-mute transition hover:bg-white/5 hover:text-bright"
+                >
+                  {batchFilter === batch.id ? 'Show everything' : 'Show only these'}
+                </button>
+                <button
+                  onClick={() => void acknowledge(batch.id)}
+                  className="rounded-md bg-arc px-2.5 py-1 text-xs font-medium text-white transition hover:brightness-110"
+                >
+                  Looks right
+                </button>
+                <ConfirmButton
+                  onConfirm={() => removeBatch(batch.id)}
+                  label="Remove these"
+                  title="Deletes the cards this import added. Your sold ledger and price history are untouched."
+                  confirm={
+                    batch.modified > 0
+                      ? `Remove ${batch.entries}, including ${batch.modified} you've changed`
+                      : `Remove all ${batch.entries}`
+                  }
+                />
+              </div>
+            </div>
+          ))}
+
+          {unreviewed.length > 1 && (
+            <button
+              onClick={async () => {
+                await api.acknowledgeAllImports()
+                setBatches(await api.importBatches())
+              }}
+              className="text-xs text-mute underline-offset-2 transition hover:text-bright hover:underline"
+            >
+              Mark all {unreviewed.length} as checked
+            </button>
+          )}
+        </div>
+      )}
+
       <div className="flex flex-wrap items-center gap-3">
         {/* Only worth showing once there is something hand-entered to separate
             out — on a collection of pure singles it would be three buttons that
@@ -314,6 +407,25 @@ export function CollectionView({
           </select>
         )}
 
+        {batches.length > 0 && (
+          <select
+            value={batchFilter}
+            onChange={(e) => setBatchFilter(e.target.value)}
+            className={control}
+            title="Show only the cards a particular CSV import added"
+          >
+            <option value="">Any import</option>
+            {batches.map((b) => (
+              <option key={b.id} value={b.id}>
+                {new Date(b.createdAt).toLocaleDateString()}{' '}
+                {new Date(b.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                {' '}— {b.cards}
+                {b.acknowledgedAt ? '' : ' (unchecked)'}
+              </option>
+            ))}
+          </select>
+        )}
+
         <select value={sort} onChange={(e) => setSort(e.target.value as SortKey)} className={control}>
           {SORTS.map((s) => (
             <option key={s.key} value={s.key}>
@@ -340,6 +452,7 @@ export function CollectionView({
         {visible.map((item) => (
           <CardTile
             key={item.id}
+            highlight={!!item.importBatch && unreviewedIds.has(item.importBatch)}
             image={item.imageSmall ? cardImage(item.cardId, 'small') : null}
             fallbackImage={item.imageSmall}
             name={item.name}

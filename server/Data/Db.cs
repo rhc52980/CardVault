@@ -74,6 +74,20 @@ public sealed class Db
 
             CREATE INDEX IF NOT EXISTS idx_collection_card ON collection(card_id);
 
+            -- One row per CSV import that added anything, so a batch of cards can be
+            -- reviewed as a unit and removed as one if it turns out to be wrong.
+            --
+            -- Deliberately holds no card list of its own: the membership lives on
+            -- collection.import_batch, so selling or deleting a single card keeps the
+            -- batch honest for free rather than needing a second place kept in step.
+            CREATE TABLE IF NOT EXISTS import_batches (
+                id              TEXT PRIMARY KEY,
+                created_at      TEXT NOT NULL,
+                -- Null until you've looked over what came in. Cards from an
+                -- unacknowledged batch are marked in the vault.
+                acknowledged_at TEXT
+            );
+
             -- One row per card + printing + source + day, which is what lets the
             -- collection be charted over time — the API itself exposes only today.
             --
@@ -226,6 +240,25 @@ public sealed class Db
         // Where the card physically is — "Binder 3, page 4", "Box A", "Safe".
         // The app knows what you own; this is so you can also find it.
         AddColumn(conn, "collection", "location", "TEXT");
+
+        // Which import a card arrived in. Null for everything added by hand and for
+        // everything that predates this, both of which are correct: neither belongs
+        // to a batch, so neither is ever marked as unreviewed or swept up by a removal.
+        AddColumn(conn, "collection", "import_batch", "TEXT");
+
+        // Stamped whenever an entry is edited, which a partial sale also routes
+        // through. Removing an import can then say how many of those cards you have
+        // since touched, instead of discarding your corrections without mentioning it.
+        AddColumn(conn, "collection", "modified_at", "TEXT");
+
+        // Created here rather than alongside the table: on an existing database the
+        // column above doesn't exist until the line above runs.
+        using (var index = conn.CreateCommand())
+        {
+            index.CommandText =
+                "CREATE INDEX IF NOT EXISTS idx_collection_batch ON collection(import_batch)";
+            index.ExecuteNonQuery();
+        }
 
         MigratePriceHistoryToSources(conn);
     }

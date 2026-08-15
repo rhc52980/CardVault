@@ -82,7 +82,30 @@ public sealed record CollectionItem(
     /// <summary>True for items you entered by hand rather than from the catalogue.</summary>
     bool IsCustom,
     /// <summary>Where the card physically lives, so you can actually find it.</summary>
-    string? Location);
+    string? Location,
+    /// <summary>
+    /// The CSV import this card arrived in, or null if it was added by hand. Cards
+    /// from an import you haven't acknowledged yet are marked in the vault.
+    /// </summary>
+    string? ImportBatch = null);
+
+/// <summary>
+/// A CSV import that put cards in the collection, and what has become of them.
+///
+/// The counts are read from the collection itself rather than stored, so selling or
+/// deleting individual cards keeps them honest with nothing needing to be kept in step.
+/// </summary>
+public sealed record ImportBatchSummary(
+    string Id,
+    string CreatedAt,
+    /// <summary>Null until you've looked over what came in.</summary>
+    string? AcknowledgedAt,
+    /// <summary>Entries from this import still in the collection.</summary>
+    int Entries,
+    /// <summary>Cards, counting quantities rather than rows.</summary>
+    int Cards,
+    /// <summary>How many of those entries you've edited or partly sold since.</summary>
+    int Modified);
 
 public sealed record CollectionStats(
     int DistinctCards,

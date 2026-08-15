@@ -13,6 +13,7 @@ import type {
   CommitResult,
   CustomItemRequest,
   FullCard,
+  ImportBatchSummary,
   ImportJob,
   SaleRecord,
   SearchCard,
@@ -332,6 +333,26 @@ export const api = {
 
   importJob(jobId: string) {
     return fetch(`/api/import/${jobId}`).then(json<ImportJob>)
+  },
+
+  /** Imports that still have cards in the collection, newest first. */
+  importBatches() {
+    return fetch('/api/imports').then(json<ImportBatchSummary[]>)
+  },
+
+  acknowledgeImport(id: string) {
+    return fetch(`/api/imports/${encodeURIComponent(id)}/acknowledge`, { method: 'POST' })
+      .then(json<ImportBatchSummary>)
+  },
+
+  acknowledgeAllImports() {
+    return fetch('/api/imports/acknowledge', { method: 'POST' }).then(json<{ acknowledged: number }>)
+  },
+
+  /** Removes the cards an import added. Sales and price history are left alone. */
+  removeImport(id: string) {
+    return fetch(`/api/imports/${encodeURIComponent(id)}`, { method: 'DELETE' })
+      .then(json<{ removed: number }>)
   },
 
   /** Each row carries its index so the outcomes can be matched back to the review list. */
