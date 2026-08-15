@@ -10,6 +10,7 @@ import type {
   PriceRefreshProgress,
   CollectionItem,
   CollectionStats,
+  CommitResult,
   CustomItemRequest,
   FullCard,
   ImportJob,
@@ -333,12 +334,13 @@ export const api = {
     return fetch(`/api/import/${jobId}`).then(json<ImportJob>)
   },
 
-  commitImport(jobId: string, rows: AddEntryRequest[]) {
+  /** Each row carries its index so the outcomes can be matched back to the review list. */
+  commitImport(jobId: string, rows: Array<AddEntryRequest & { index: number }>) {
     return fetch(`/api/import/${jobId}/commit`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ rows }),
-    }).then(json<{ added: number }>)
+    }).then(json<CommitResult>)
   },
 }
 

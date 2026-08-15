@@ -1,7 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import { api, cardImage, money } from '../api'
 import { CONDITIONS, CONDITION_LABELS, prettyVariant } from '../lib/cardStyles'
-import type { AddEntryRequest, ImportJob, ImportRow, ImportStatus } from '../types'
+import type {
+  AddEntryRequest,
+  CommitOutcome,
+  CommitResult,
+  ImportJob,
+  ImportRow,
+  ImportStatus,
+} from '../types'
 
 const control =
   'rounded-md border border-edge bg-abyss px-2 py-1 text-xs text-bright outline-none focus:border-arc focus:ring-1 focus:ring-arc'
@@ -9,10 +16,17 @@ const control =
 const STATUS_STYLE: Record<ImportStatus, { label: string; className: string }> = {
   Matched: { label: 'Matched', className: 'bg-mint/15 text-mint ring-mint/30' },
   Ambiguous: { label: 'Needs a choice', className: 'bg-gold/15 text-gold ring-gold/30' },
+  Mismatch: { label: 'Check this one', className: 'bg-orange-500/15 text-orange-200 ring-orange-400/40' },
   NotFound: { label: 'Not found', className: 'bg-rose/15 text-rose ring-rose/30' },
   LookupFailed: { label: 'Lookup failed', className: 'bg-orange-500/15 text-orange-300 ring-orange-400/30' },
   Invalid: { label: 'Incomplete', className: 'bg-white/10 text-mute ring-white/20' },
 }
+
+/** Statuses that carry a card id and so can end up in the vault. */
+const RESOLVABLE: ImportStatus[] = ['Matched', 'Ambiguous', 'Mismatch']
+
+/** Statuses that offer a list to choose from rather than a single answer. */
+const CHOOSABLE: ImportStatus[] = ['Ambiguous', 'Mismatch']
 
 /** Local editing state layered over what the server resolved. */
 interface RowEdit {
@@ -31,7 +45,9 @@ export function ImportView({ onImported }: { onImported: () => void }) {
   const [edits, setEdits] = useState<Record<number, RowEdit>>({})
   const [error, setError] = useState<string | null>(null)
   const [committing, setCommitting] = useState(false)
-  const [committed, setCommitted] = useState<number | null>(null)
+  const [results, setResults] = useState<Record<number, CommitOutcome>>({})
+  const [lastCommit, setLastCommit] = useState<CommitResult | null>(null)
+  const [filter, setFilter] = useState<ImportStatus | null>(null)
   const [dragging, setDragging] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
@@ -79,7 +95,9 @@ export function ImportView({ onImported }: { onImported: () => void }) {
 
   async function start(text: string) {
     setError(null)
-    setCommitted(null)
+    setResults({})
+    setLastCommit(null)
+    setFilter(null)
     setEdits({})
     setJob(null)
     try {
@@ -122,10 +140,11 @@ export function ImportView({ onImported }: { onImported: () => void }) {
     setCommitting(true)
     setError(null)
     try {
-      const rows: AddEntryRequest[] = job.rows
+      const rows: Array<AddEntryRequest & { index: number }> = job.rows
         .map((row) => ({ row, edit: edits[row.index] }))
         .filter(({ edit }) => edit?.include && edit.cardId)
         .map(({ row, edit }) => ({
+          index: row.index,
           cardId: edit.cardId!,
           quantity: edit.quantity,
           variant: edit.variant,
@@ -137,7 +156,25 @@ export function ImportView({ onImported }: { onImported: () => void }) {
         }))
 
       const res = await api.commitImport(jobId, rows)
-      setCommitted(res.added)
+
+      setResults((prev) => {
+        const next = { ...prev }
+        for (const outcome of res.rows) next[outcome.index] = outcome
+        return next
+      })
+
+      // Untick whatever landed. The list deliberately stays on screen so the rows
+      // that didn't can be worked through and committed again, and without this that
+      // second press would add every successful card a second time.
+      setEdits((prev) => {
+        const next = { ...prev }
+        for (const outcome of res.rows)
+          if (outcome.added && next[outcome.index])
+            next[outcome.index] = { ...next[outcome.index], include: false }
+        return next
+      })
+
+      setLastCommit(res)
       onImported()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Import failed')
@@ -151,8 +188,54 @@ export function ImportView({ onImported }: { onImported: () => void }) {
     setJob(null)
     setJobId(null)
     setEdits({})
-    setCommitted(null)
+    setResults({})
+    setLastCommit(null)
+    setFilter(null)
     setError(null)
+  }
+
+  /**
+   * The rows that never made it in, as a CSV to fix and feed back through.
+   *
+   * Emits what was transcribed rather than what we resolved to: for a mismatched row
+   * the resolved card is the thing under suspicion, so handing it back would launder
+   * the bad guess into the next attempt. The number is rebuilt as it was printed —
+   * "45/094" — because the denominator is what identifies the set on re-import.
+   */
+  function downloadUnresolved() {
+    if (!job) return
+
+    const cell = (value: string | number | null | undefined) => {
+      const text = value === null || value === undefined ? '' : String(value)
+      return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text
+    }
+
+    const lines = ['Name,Set,Number,Quantity,Condition,Notes']
+    for (const row of job.rows) {
+      if (results[row.index]?.added) continue
+
+      const number = row.claimedNumber ?? row.number ?? ''
+      const printed = row.printedTotal ? `${number}/${row.printedTotal}` : number
+
+      lines.push(
+        [
+          cell(row.claimedName ?? row.name),
+          // Blanked when we overwrote it with the suspect card's set.
+          cell(row.status === 'Mismatch' ? '' : row.setName),
+          cell(printed),
+          cell(row.quantity),
+          cell(row.condition),
+          cell(results[row.index]?.reason ?? row.message),
+        ].join(','),
+      )
+    }
+
+    const url = URL.createObjectURL(new Blob([lines.join('\n')], { type: 'text/csv' }))
+    const link = document.createElement('a')
+    link.href = url
+    link.download = 'cardvault-unresolved.csv'
+    link.click()
+    URL.revokeObjectURL(url)
   }
 
   const selectedCount = job?.rows.filter((r) => edits[r.index]?.include && edits[r.index]?.cardId).length ?? 0
@@ -160,25 +243,8 @@ export function ImportView({ onImported }: { onImported: () => void }) {
     acc[r.status] = (acc[r.status] ?? 0) + 1
     return acc
   }, {})
-
-  // ------------------------------------------------------------------ committed
-
-  if (committed !== null) {
-    return (
-      <div className="panel rounded-2xl px-6 py-16 text-center">
-        <p className="text-2xl font-semibold text-mint">
-          {committed} {committed === 1 ? 'card' : 'cards'} added
-        </p>
-        <p className="mt-2 text-sm text-mute">Your vault has been updated.</p>
-        <button
-          onClick={reset}
-          className="mt-6 rounded-lg bg-arc px-5 py-2.5 text-sm font-medium text-white transition hover:brightness-110"
-        >
-          Import another file
-        </button>
-      </div>
-    )
-  }
+  const visibleRows = job?.rows.filter((r) => filter === null || r.status === filter) ?? []
+  const unresolvedCount = job?.rows.filter((r) => !results[r.index]?.added).length ?? 0
 
   // ------------------------------------------------------------------- resolving
 
@@ -194,8 +260,9 @@ export function ImportView({ onImported }: { onImported: () => void }) {
           <div className="h-full rounded-full bg-arc transition-[width] duration-300" style={{ width: `${pct}%` }} />
         </div>
         <p className="mt-6 text-xs text-mute">
-          Rows already in your local cache resolve instantly; the rest are looked up one at a time
-          to stay inside the API's rate limit.
+          Rows resolve instantly from your offline catalogue and from cards you already hold.
+          Anything neither knows about is looked up one at a time, to stay inside the API's
+          rate limit.
         </p>
       </div>
     )
@@ -207,16 +274,26 @@ export function ImportView({ onImported }: { onImported: () => void }) {
     return (
       <div className="space-y-5">
         <div className="panel flex flex-wrap items-center justify-between gap-4 rounded-xl px-4 py-3">
-          <div className="flex flex-wrap items-center gap-3 text-sm">
-            <span className="text-bright">{job.rows.length} rows</span>
+          <div className="flex flex-wrap items-center gap-2 text-sm">
+            <button
+              onClick={() => setFilter(null)}
+              className={`rounded-full px-2.5 py-1 text-xs ring-1 transition ${
+                filter === null ? 'bg-white/10 text-bright ring-white/25' : 'text-mute ring-transparent hover:text-bright'
+              }`}
+            >
+              All {job.rows.length}
+            </button>
             {counts &&
               Object.entries(counts).map(([status, n]) => (
-                <span
+                <button
                   key={status}
-                  className={`rounded-full px-2.5 py-1 text-xs ring-1 ${STATUS_STYLE[status as ImportStatus].className}`}
+                  onClick={() => setFilter(filter === status ? null : (status as ImportStatus))}
+                  className={`rounded-full px-2.5 py-1 text-xs ring-1 transition ${
+                    STATUS_STYLE[status as ImportStatus].className
+                  } ${filter === status ? 'brightness-150' : 'opacity-70 hover:opacity-100'}`}
                 >
                   {n} {STATUS_STYLE[status as ImportStatus].label.toLowerCase()}
-                </span>
+                </button>
               ))}
           </div>
           <div className="flex items-center gap-2">
@@ -233,6 +310,35 @@ export function ImportView({ onImported }: { onImported: () => void }) {
           </div>
         </div>
 
+        {lastCommit && (
+          <div className="panel flex flex-wrap items-center justify-between gap-3 rounded-xl px-4 py-3">
+            <p className="text-sm">
+              <span className="font-medium text-mint">
+                {lastCommit.added} {lastCommit.added === 1 ? 'card' : 'cards'} added
+              </span>
+              {unresolvedCount > 0 && (
+                <span className="text-mute"> · {unresolvedCount} still to deal with</span>
+              )}
+            </p>
+            <div className="flex items-center gap-2">
+              {unresolvedCount > 0 && (
+                <button
+                  onClick={downloadUnresolved}
+                  className="rounded-lg border border-edge px-3 py-1.5 text-xs text-mute transition hover:text-bright"
+                >
+                  Download the {unresolvedCount} unresolved
+                </button>
+              )}
+              <button
+                onClick={reset}
+                className="rounded-lg bg-arc px-3 py-1.5 text-xs font-medium text-white transition hover:brightness-110"
+              >
+                Import another file
+              </button>
+            </div>
+          </div>
+        )}
+
         {job.error && <p className="rounded-lg bg-rose/10 px-4 py-3 text-sm text-rose">{job.error}</p>}
         {error && <p className="rounded-lg bg-rose/10 px-4 py-3 text-sm text-rose">{error}</p>}
         {job.unmappedColumns.length > 0 && (
@@ -242,15 +348,21 @@ export function ImportView({ onImported }: { onImported: () => void }) {
         )}
 
         <div className="space-y-2">
-          {job.rows.map((row) => (
+          {visibleRows.map((row) => (
             <ImportRowCard
               key={row.index}
               row={row}
               edit={edits[row.index]}
+              outcome={results[row.index]}
               onChange={(patch) => update(row.index, patch)}
               onPickCandidate={(cardId) => pickCandidate(row, cardId)}
             />
           ))}
+          {visibleRows.length === 0 && (
+            <p className="panel rounded-xl px-4 py-8 text-center text-sm text-mute">
+              No rows with that status.
+            </p>
+          )}
         </div>
       </div>
     )
@@ -359,7 +471,9 @@ export function ImportView({ onImported }: { onImported: () => void }) {
             <span className="text-bright">Purchase Date</span> — acquired, date added
           </li>
           <li>
-            <span className="text-bright">Card ID</span> — a pokemontcg.io id like <code>base1-4</code>
+            <span className="text-bright">Card ID</span> — a pokemontcg.io id like <code>base1-4</code>.
+            Include a name or number alongside it and the two are checked against each other,
+            so an id that points at the wrong card gets flagged rather than imported.
           </li>
           <li>
             <span className="text-bright">Notes</span> — note, comment
@@ -373,26 +487,29 @@ export function ImportView({ onImported }: { onImported: () => void }) {
 function ImportRowCard({
   row,
   edit,
+  outcome,
   onChange,
   onPickCandidate,
 }: {
   row: ImportRow
   edit?: RowEdit
+  outcome?: CommitOutcome
   onChange: (patch: Partial<RowEdit>) => void
   onPickCandidate: (cardId: string) => void
 }) {
   const style = STATUS_STYLE[row.status]
-  const resolvable = row.status === 'Matched' || row.status === 'Ambiguous'
+  const resolvable = RESOLVABLE.includes(row.status)
   const variants = edit?.variants?.length ? edit.variants : row.variants
+  const added = outcome?.added === true
 
   return (
     <div
-      className={`panel rounded-xl p-3 transition ${edit?.include ? '' : 'opacity-60'} ${
+      className={`panel rounded-xl p-3 transition ${added ? 'opacity-50' : edit?.include ? '' : 'opacity-60'} ${
         resolvable ? '' : 'border-dashed'
-      }`}
+      } ${row.status === 'Mismatch' && !added ? 'ring-1 ring-orange-400/40' : ''}`}
     >
       <div className="flex flex-wrap items-start gap-3">
-        {resolvable && (
+        {resolvable && !added && (
           <input
             type="checkbox"
             checked={edit?.include ?? false}
@@ -418,7 +535,13 @@ function ImportRowCard({
 
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <span className={`rounded-full px-2 py-0.5 text-[11px] ring-1 ${style.className}`}>{style.label}</span>
+            <span
+              className={`rounded-full px-2 py-0.5 text-[11px] ring-1 ${
+                added ? 'bg-mint/15 text-mint ring-mint/30' : style.className
+              }`}
+            >
+              {added ? 'Added' : style.label}
+            </span>
             <span className="truncate font-medium text-bright">{row.name ?? '—'}</span>
             {row.setName && (
               <span className="truncate text-xs text-mute">
@@ -430,16 +553,41 @@ function ImportRowCard({
             )}
           </div>
 
-          {row.message && <p className="mt-1 text-xs text-mute">{row.message}</p>}
+          {/*
+            Both readings side by side, because the whole point of a mismatch is that
+            one of them is wrong and no amount of prose beats seeing them together
+            next to the artwork.
+          */}
+          {row.status === 'Mismatch' && !added && (
+            <p className="mt-1 text-xs">
+              <span className="text-mute">your file read </span>
+              <span className="text-orange-200">
+                {row.claimedName ?? '—'}
+                {row.claimedNumber ? ` #${row.claimedNumber}` : ''}
+              </span>
+              <span className="text-mute"> · this id is </span>
+              <span className="text-bright">
+                {row.name}
+                {row.number ? ` #${row.number}` : ''}
+              </span>
+            </p>
+          )}
+
+          {outcome && !outcome.added && outcome.reason && (
+            <p className="mt-1 text-xs text-rose">{outcome.reason}</p>
+          )}
+          {row.message && !added && <p className="mt-1 text-xs text-mute">{row.message}</p>}
           {!resolvable && <p className="mt-1 truncate text-xs text-mute italic">{row.source}</p>}
 
-          {row.status === 'Ambiguous' && (
+          {CHOOSABLE.includes(row.status) && !added && (
             <select
               value={edit?.cardId ?? ''}
               onChange={(e) => onPickCandidate(e.target.value)}
               className={`${control} mt-2 w-full max-w-md`}
             >
-              <option value="">Choose the right card…</option>
+              <option value="">
+                {row.status === 'Mismatch' ? 'Confirm which card this is…' : 'Choose the right card…'}
+              </option>
               {row.candidates.map((c) => (
                 <option key={c.cardId} value={c.cardId}>
                   {c.name} — {c.setName} #{c.number}
@@ -450,7 +598,7 @@ function ImportRowCard({
             </select>
           )}
 
-          {resolvable && edit?.cardId && (
+          {resolvable && edit?.cardId && !added && (
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <label className="flex items-center gap-1 text-xs text-mute">
                 Qty

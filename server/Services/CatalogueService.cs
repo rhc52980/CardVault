@@ -388,6 +388,79 @@ public sealed class CatalogueService(
     }
 
     /// <summary>
+    /// Catalogue rows matching any combination of set, number and name — the same
+    /// question <see cref="CardCache.FindPayloads"/> asks of the cards we hold real
+    /// payloads for, asked instead of the twenty thousand we merely know about.
+    ///
+    /// The printed total is applied in SQL rather than left to the caller's narrowing,
+    /// and that is entirely down to the row limit: "4" on its own matches card 4 in
+    /// very nearly every set ever printed, so trimming to a page of results before the
+    /// denominator is considered can leave the right card off the page altogether.
+    /// When the denominator matches nothing the query is repeated without it, so a
+    /// wrong or unknown total widens the search rather than emptying it.
+    /// </summary>
+    public List<CatalogueCard> FindCards(
+        string? setId, string? number, string? name, int? printedTotal, int limit = 50)
+    {
+        var rows = FindCardsCore(setId, number, name, printedTotal, limit);
+        if (rows.Count == 0 && printedTotal is not null)
+            rows = FindCardsCore(setId, number, name, null, limit);
+        return rows;
+    }
+
+    private List<CatalogueCard> FindCardsCore(
+        string? setId, string? number, string? name, int? printedTotal, int limit)
+    {
+        var clauses = new List<string>();
+        var pars = new Dictionary<string, object>();
+
+        if (!string.IsNullOrWhiteSpace(setId))
+        {
+            clauses.Add("LOWER(set_id) = $setId");
+            pars["$setId"] = setId.Trim().ToLowerInvariant();
+        }
+
+        if (!string.IsNullOrWhiteSpace(number))
+        {
+            clauses.Add("LOWER(number) = $number");
+            pars["$number"] = number.Trim().ToLowerInvariant();
+        }
+
+        if (!string.IsNullOrWhiteSpace(name))
+        {
+            clauses.Add("LOWER(name) LIKE $name");
+            pars["$name"] = $"%{name.Trim().ToLowerInvariant()}%";
+        }
+
+        if (printedTotal is { } total)
+        {
+            clauses.Add("printed_total = $printedTotal");
+            pars["$printedTotal"] = total;
+        }
+
+        // Never answer an unconstrained question with the whole catalogue.
+        if (clauses.Count == 0) return [];
+
+        using var conn = db.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = $"""
+            SELECT id, name, set_id, set_name, set_series, number, printed_total,
+                   rarity, supertype, types, artist, release_date, has_image
+            FROM catalogue
+            WHERE {string.Join(" AND ", clauses)}
+            ORDER BY release_date DESC, name
+            LIMIT $limit
+            """;
+        foreach (var (key, value) in pars) cmd.Parameters.AddWithValue(key, value);
+        cmd.Parameters.AddWithValue("$limit", Math.Clamp(limit, 1, 250));
+
+        var results = new List<CatalogueCard>();
+        using var r = cmd.ExecuteReader();
+        while (r.Read()) results.Add(Map(r));
+        return results;
+    }
+
+    /// <summary>
     /// An API-shaped payload for a catalogue card, so it can enter the collection
     /// without the network being involved at all.
     ///

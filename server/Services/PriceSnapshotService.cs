@@ -22,6 +22,9 @@ public sealed class PriceSnapshotService(
 {
     private static readonly TimeSpan Interval = TimeSpan.FromHours(24);
 
+    /// <summary>Gap between calls when catching up a batch, matching the import's own.</summary>
+    private static readonly TimeSpan EnrichPacing = TimeSpan.FromMilliseconds(150);
+
     private readonly object _refreshLock = new();
     private PriceRefreshProgress _refresh = new(false, 0, 0, null, null, null);
 
@@ -66,22 +69,60 @@ public sealed class PriceSnapshotService(
     {
         _ = Task.Run(async () =>
         {
-            try
-            {
-                var card = await api.GetCardAsync(cardId, CancellationToken.None);
-                if (card is null) return;
-
-                cache.Upsert(card.Value);
-                await RecordFromAllSourcesAsync(
-                    cardId, card.Value, DateTime.UtcNow.ToString("yyyy-MM-dd"), CancellationToken.None);
-
+            if (await EnrichOneAsync(cardId, CancellationToken.None))
                 log.LogInformation("Filled in prices for newly added {CardId}", cardId);
-            }
-            catch (Exception e)
-            {
-                log.LogDebug(e, "Could not fill in prices for {CardId} yet; the daily refresh will", cardId);
-            }
         }, CancellationToken.None);
+    }
+
+    /// <summary>
+    /// The same catch-up for a batch of cards, walked one at a time.
+    ///
+    /// A CSV import can commit a hundred catalogue-seeded cards in one go, and calling
+    /// <see cref="QueueEnrich"/> per card would put a hundred simultaneous requests
+    /// into an API that is unreliable under no load whatsoever. One sequential pass,
+    /// paced the way the import itself paces its lookups, reaches the same answer
+    /// without being the reason it fails.
+    /// </summary>
+    public void QueueEnrichMany(IReadOnlyList<string> cardIds)
+    {
+        if (cardIds.Count == 0) return;
+
+        _ = Task.Run(async () =>
+        {
+            var filled = 0;
+            foreach (var cardId in cardIds)
+            {
+                if (await EnrichOneAsync(cardId, CancellationToken.None)) filled++;
+                await Task.Delay(EnrichPacing, CancellationToken.None);
+            }
+
+            log.LogInformation(
+                "Filled in prices for {Filled} of {Total} imported cards", filled, cardIds.Count);
+        }, CancellationToken.None);
+    }
+
+    /// <summary>
+    /// Fetches and records one card, reporting whether it worked. Failure is logged at
+    /// debug and otherwise swallowed: the daily refresh re-fetches every owned card,
+    /// so there is nothing here worth retrying or surfacing.
+    /// </summary>
+    private async Task<bool> EnrichOneAsync(string cardId, CancellationToken ct)
+    {
+        try
+        {
+            var card = await api.GetCardAsync(cardId, ct);
+            if (card is null) return false;
+
+            cache.Upsert(card.Value);
+            await RecordFromAllSourcesAsync(
+                cardId, card.Value, DateTime.UtcNow.ToString("yyyy-MM-dd"), ct);
+            return true;
+        }
+        catch (Exception e)
+        {
+            log.LogDebug(e, "Could not fill in prices for {CardId} yet; the daily refresh will", cardId);
+            return false;
+        }
     }
 
     protected override async Task ExecuteAsync(CancellationToken ct)

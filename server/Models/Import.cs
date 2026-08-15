@@ -8,6 +8,17 @@ public enum ImportStatus
     /// <summary>Several cards fit — the user picks which one.</summary>
     Ambiguous,
 
+    /// <summary>
+    /// The row's card id resolved, but to a card the rest of the row disagrees with.
+    ///
+    /// A card carries no pokemontcg.io id anywhere on it, so anything filling in a
+    /// Card ID column is inferring it from the set symbol. An inferred id that is
+    /// wrong is still perfectly valid — it resolves to exactly one real card and would
+    /// otherwise arrive looking every bit as matched as a correct one. This status is
+    /// the difference between importing the wrong card and being asked about it.
+    /// </summary>
+    Mismatch,
+
     /// <summary>Nothing in the catalogue matched.</summary>
     NotFound,
 
@@ -56,6 +67,18 @@ public sealed class ImportRow
     /// </summary>
     public int? PrintedTotal { get; set; }
 
+    /// <summary>
+    /// What the row itself said the card was, kept because resolution overwrites
+    /// <see cref="Name"/> and <see cref="Number"/> with the matched card's own values.
+    ///
+    /// Without these a mismatched row can only describe the disagreement in prose, and
+    /// the leftovers export would hand back the card we suspect is wrong rather than
+    /// what was actually transcribed off the card.
+    /// </summary>
+    public string? ClaimedName { get; set; }
+
+    public string? ClaimedNumber { get; set; }
+
     public string? Rarity { get; set; }
     public string? ImageSmall { get; set; }
     public double? MarketPrice { get; set; }
@@ -96,6 +119,23 @@ public sealed record CommitRow(
     double? PurchasePrice = null,
     string? PurchaseDate = null,
     string? Notes = null,
-    string? Location = null);
+    string? Location = null,
+    /// <summary>
+    /// The row this came from, echoed back in <see cref="CommitOutcome"/> so the
+    /// review list can mark up individual rows rather than only a total. Defaults to
+    /// -1 for callers that don't track rows, such as the tests.
+    /// </summary>
+    int Index = -1);
 
 public sealed record CommitRequest(IReadOnlyList<CommitRow> Rows);
+
+/// <summary>
+/// What became of one row at commit time.
+///
+/// Reported per row rather than as a total because a commit that adds 97 of 100 owes
+/// you the three, and a bare count can't say which. <see cref="Reason"/> is set only
+/// when <see cref="Added"/> is false.
+/// </summary>
+public sealed record CommitOutcome(int Index, string CardId, bool Added, string? Reason);
+
+public sealed record CommitResult(int Added, IReadOnlyList<CommitOutcome> Rows);
