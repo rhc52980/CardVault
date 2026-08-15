@@ -334,7 +334,14 @@ export interface SetCard {
   ownedQuantity: number
 }
 
-export type ImportStatus = 'Matched' | 'Ambiguous' | 'NotFound' | 'LookupFailed' | 'Invalid'
+export type ImportStatus =
+  | 'Matched'
+  | 'Ambiguous'
+  /** The id resolved, but to a card the row's own name or number disagrees with. */
+  | 'Mismatch'
+  | 'NotFound'
+  | 'LookupFailed'
+  | 'Invalid'
 
 export interface CardCandidate {
   cardId: string
@@ -358,6 +365,11 @@ export interface ImportRow {
   setId?: string | null
   setCode?: string | null
   number?: string | null
+  /** The denominator when the number was written as printed — "45/094". */
+  printedTotal?: number | null
+  /** What the CSV said, before resolution overwrote `name`/`number` with the match. */
+  claimedName?: string | null
+  claimedNumber?: string | null
   rarity?: string | null
   imageSmall?: string | null
   marketPrice?: number | null
@@ -380,6 +392,19 @@ export interface ImportJob {
   error?: string | null
   unmappedColumns: string[]
   rows: ImportRow[]
+}
+
+/** What became of one row at commit time. `reason` is set only when `added` is false. */
+export interface CommitOutcome {
+  index: number
+  cardId: string
+  added: boolean
+  reason?: string | null
+}
+
+export interface CommitResult {
+  added: number
+  rows: CommitOutcome[]
 }
 
 /** Full card payload straight from pokemontcg.io, used by the detail panel. */

@@ -15,6 +15,7 @@ namespace CardVault.Services;
 /// </summary>
 public sealed class ImportService(
     CardCache cache,
+    CatalogueService catalogue,
     PokemonTcgClient api,
     CollectionService collection,
     PriceSnapshotService snapshots,
@@ -181,6 +182,11 @@ public sealed class ImportService(
 
         // Held separately from the resolved card's own values until we match it.
         row.Variant = NormalizeVariant(Get("variant"));
+
+        // Snapshot of what the CSV claimed, taken before anything resolves and starts
+        // overwriting the row with a matched card's details.
+        row.ClaimedName = row.Name;
+        row.ClaimedNumber = row.Number;
         return row;
     }
 
@@ -191,28 +197,49 @@ public sealed class ImportService(
         var setId = ExtractSetId(row);
         var setCode = row.SetCode;
 
-        // 1. An explicit card id is unambiguous — take it straight.
+        // 1. An explicit card id resolves to exactly one card — but see below, that is
+        //    not the same thing as it being the right one.
         if (!string.IsNullOrWhiteSpace(row.CardId))
         {
-            var payload = cache.GetPayload(row.CardId);
-            if (payload is null)
+            var byId = await ResolveIdAsync(row.CardId, ct);
+            if (byId is null)
             {
-                var fetched = await FetchCardAsync(row.CardId, ct);
-                if (fetched is not null)
-                {
-                    cache.Upsert(fetched.Value);
-                    payload = fetched.Value.GetRawText();
-                }
-            }
-
-            if (payload is not null)
-            {
-                Apply(row, ToCandidate(payload));
+                row.Status = ImportStatus.NotFound;
+                row.Message = $"No card with id '{row.CardId}'.";
                 return;
             }
 
-            row.Status = ImportStatus.NotFound;
-            row.Message = $"No card with id '{row.CardId}'.";
+            // The id resolved, so we could stop here — and until the row is checked
+            // against what was transcribed off the same card, stopping here is exactly
+            // how a misread set symbol becomes a confidently imported wrong card.
+            var conflict = CardIdCheck.Contradiction(
+                byId.CardId, byId.Name, byId.Number, row.ClaimedName, row.ClaimedNumber);
+
+            if (conflict is not null)
+            {
+                var alternatives = FindLocalCandidates(setId, row.ClaimedNumber, row.ClaimedName, row.PrintedTotal)
+                    .Where(c => c.CardId != byId.CardId)
+                    .ToList();
+
+                row.Status = ImportStatus.Mismatch;
+                row.Message = alternatives.Count > 0
+                    ? $"Check this one — {conflict}."
+                    : $"Check this one — {conflict}. Nothing else matched the row, so either the id is right and the rest of the row is wrong, or this card needs re-scanning.";
+
+                // The id's card first: it is still the most likely answer, and leading
+                // with it means the thumbnail is on screen to be compared against.
+                row.Candidates = new List<CardCandidate> { byId }
+                    .Concat(alternatives)
+                    .Take(12)
+                    .ToList();
+
+                // Carries the id's card so its art renders, but Matched is deliberately
+                // withheld — this row does not get to be ticked without being looked at.
+                Describe(row, byId);
+                return;
+            }
+
+            Apply(row, byId);
             return;
         }
 
@@ -238,24 +265,52 @@ public sealed class ImportService(
                            || row.Name is not null
                            || row.PrintedTotal is not null;
 
-        var local = identifiable
-            ? cache.FindPayloads(setId, row.Number, setId is null ? row.Name : null)
-            : [];
-
-        if (local.Count > 0)
+        if (identifiable)
         {
-            var candidates = local.Select(ToCandidate).ToList();
-            var narrowed = NarrowBySetName(
-                NarrowByName(NarrowByPrintedTotal(candidates, row.PrintedTotal), row.Name),
-                row.SetName);
-            if (narrowed.Count == 1)
+            // The cards we already hold payloads for come first: they carry real prices
+            // and a real printing list, neither of which the catalogue can offer.
+            var cached = Narrow(
+                cache.FindPayloads(setId, row.Number, setId is null ? row.Name : null)
+                     .Select(ToCandidate).ToList(), row);
+
+            if (cached.Count == 1)
             {
-                Apply(row, narrowed[0]);
+                Apply(row, cached[0]);
                 return;
+            }
+
+            // 3. Then the offline catalogue. Unlike the cache it knows about every card
+            //    rather than the ones that happen to have been seen before, and that
+            //    completeness is why ambiguity here is worth presenting as a choice
+            //    instead of falling through to the network: asking pokemontcg.io the
+            //    same question cannot narrow it any further, and would trade ten
+            //    seconds and a coin-flip on a 500 for the identical answer.
+            //
+            //    Coming up empty still falls through, because a catalogue downloaded
+            //    months ago has never heard of last month's set.
+            if (catalogue.IsUsable)
+            {
+                var offline = Narrow(
+                    catalogue.FindCards(setId, row.Number, setId is null ? row.Name : null, row.PrintedTotal)
+                             .Select(ToCandidate).ToList(), row);
+
+                if (offline.Count == 1)
+                {
+                    Apply(row, offline[0]);
+                    return;
+                }
+
+                if (offline.Count > 1)
+                {
+                    row.Status = ImportStatus.Ambiguous;
+                    row.Candidates = offline.Take(12).ToList();
+                    row.Message = $"{offline.Count} cards match — pick the right printing.";
+                    return;
+                }
             }
         }
 
-        // 3. Ask the API, most precise query form first.
+        // 4. Ask the API, most precise query form first.
         var queries = new List<string>();
         if (setId is not null && row.Number is not null) queries.Add($"set.id:{Escape(setId)} number:{Escape(row.Number)}");
         if (setCode is not null && row.Number is not null) queries.Add($"set.ptcgoCode:{Escape(setCode)} number:{Escape(row.Number)}");
@@ -310,10 +365,7 @@ public sealed class ImportService(
                 await Task.Delay(150, ct);
             }
 
-            var candidates = payloads.Select(ToCandidate).ToList();
-            var narrowed = NarrowBySetName(
-                NarrowByName(NarrowByPrintedTotal(candidates, row.PrintedTotal), row.Name),
-                row.SetName);
+            var narrowed = Narrow(payloads.Select(ToCandidate).ToList(), row);
 
             if (narrowed.Count == 1)
             {
@@ -340,6 +392,51 @@ public sealed class ImportService(
         row.Status = ImportStatus.NotFound;
         row.Message = "No card in the catalogue matched this row.";
     }
+
+    /// <summary>
+    /// One card by id, from whatever can answer soonest: the payloads we hold, then
+    /// the offline catalogue, then the network. A CSV whose Card ID column is filled
+    /// in resolves entirely offline when the catalogue is present.
+    /// </summary>
+    private async Task<CardCandidate?> ResolveIdAsync(string cardId, CancellationToken ct)
+    {
+        if (cache.GetPayload(cardId) is { } payload) return ToCandidate(payload);
+
+        if (catalogue.IsUsable && catalogue.Get(cardId) is { } offline) return ToCandidate(offline);
+
+        var fetched = await FetchCardAsync(cardId, ct);
+        if (fetched is null) return null;
+
+        cache.Upsert(fetched.Value);
+        return ToCandidate(fetched.Value.GetRawText());
+    }
+
+    /// <summary>
+    /// Everything locally known that fits the row, cache and catalogue together, with
+    /// no network involved. Used to offer alternatives beside a card id the rest of the
+    /// row disagrees with, where going to the API would mean a request per doubted row.
+    /// </summary>
+    private List<CardCandidate> FindLocalCandidates(string? setId, string? number, string? name, int? printedTotal)
+    {
+        if (number is null && name is null) return [];
+
+        var found = cache.FindPayloads(setId, number, name).Select(ToCandidate).ToList();
+
+        if (catalogue.IsUsable)
+        {
+            var known = found.Select(c => c.CardId).ToHashSet();
+            found.AddRange(catalogue.FindCards(setId, number, name, printedTotal)
+                                    .Select(ToCandidate)
+                                    .Where(c => known.Add(c.CardId)));
+        }
+
+        return found;
+    }
+
+    private static List<CardCandidate> Narrow(List<CardCandidate> candidates, ImportRow row)
+        => NarrowBySetName(
+            NarrowByName(NarrowByPrintedTotal(candidates, row.PrintedTotal), row.Name),
+            row.SetName);
 
     private async Task<JsonElement?> FetchCardAsync(string id, CancellationToken ct)
     {
@@ -411,7 +508,25 @@ public sealed class ImportService(
 
     private static void Apply(ImportRow row, CardCandidate card)
     {
+        var wanted = row.Variant;
+
+        Describe(row, card);
         row.Status = ImportStatus.Matched;
+
+        if (!string.Equals(row.Variant, wanted, StringComparison.Ordinal))
+            row.Message = $"No '{wanted}' printing — using '{row.Variant}'.";
+    }
+
+    /// <summary>
+    /// Copies a card's details onto the row without declaring the row settled.
+    ///
+    /// Split out from <see cref="Apply"/> for the mismatch case, which needs to show
+    /// the card an id points at while withholding Matched: you cannot compare a scan
+    /// against a thumbnail that was never drawn, and the whole point of flagging the
+    /// row is to get a person to look at the picture.
+    /// </summary>
+    private static void Describe(ImportRow row, CardCandidate card)
+    {
         row.CardId = card.CardId;
         row.Name = card.Name;
         row.SetName = card.SetName;
@@ -424,12 +539,25 @@ public sealed class ImportService(
         // The CSV's printing may not exist for this card (a "reverse holo" that was
         // never printed as one). Fall back rather than storing a variant with no price.
         if (card.Variants.Count > 0 && !card.Variants.Contains(row.Variant))
-        {
-            var fallback = card.Variants[0];
-            row.Message = $"No '{row.Variant}' printing — using '{fallback}'.";
-            row.Variant = fallback;
-        }
+            row.Variant = card.Variants[0];
     }
+
+    /// <summary>
+    /// A catalogue row as a candidate. No market price, because the bulk data carries
+    /// none and inventing one is the thing this app refuses to do — and a guessed
+    /// printing list rather than a real one, exactly as the offline add path shows,
+    /// since the daily refresh replaces both within a day of the card being owned.
+    /// </summary>
+    private static CardCandidate ToCandidate(CatalogueCard card) => new(
+        CardId: card.Id,
+        Name: card.Name,
+        SetName: card.SetName,
+        Number: card.Number,
+        Rarity: card.Rarity,
+        ImageSmall: card.HasImage ? $"/img/{card.Id}/small" : null,
+        MarketPrice: null,
+        Variants: Pricing.LikelyVariants(card.Rarity, card.ReleaseDate),
+        PrintedTotal: card.PrintedTotal);
 
     private static CardCandidate ToCandidate(string payload)
     {
@@ -464,12 +592,39 @@ public sealed class ImportService(
 
     // -------------------------------------------------------------------- commit
 
-    public int Commit(string jobId, IReadOnlyList<CommitRow> rows)
+    public CommitResult Commit(string jobId, IReadOnlyList<CommitRow> rows)
     {
+        var outcomes = new List<CommitOutcome>();
+        var seeded = new List<string>();
         var added = 0;
+
         foreach (var row in rows)
         {
-            if (string.IsNullOrWhiteSpace(row.CardId) || !cache.Has(row.CardId)) continue;
+            if (string.IsNullOrWhiteSpace(row.CardId))
+            {
+                outcomes.Add(new CommitOutcome(row.Index, "", false, "No card was chosen for this row."));
+                continue;
+            }
+
+            // A card resolved from the offline catalogue has no payload yet, and until
+            // this existed the row was simply skipped: the commit reported a smaller
+            // number than you selected and never said which ones went missing. Seed it
+            // the way the single-card add does, then let the enrichment pass fetch the
+            // real prices and printings behind you.
+            if (!cache.Has(row.CardId))
+            {
+                var payload = catalogue.IsUsable ? catalogue.BuildPayload(row.CardId) : null;
+                if (payload is null)
+                {
+                    outcomes.Add(new CommitOutcome(
+                        row.Index, row.CardId, false,
+                        "No local details for this card — re-run the import for this row."));
+                    continue;
+                }
+
+                cache.Upsert(payload.Value);
+                seeded.Add(row.CardId);
+            }
 
             collection.Add(new AddEntryRequest(
                 CardId: row.CardId,
@@ -483,12 +638,20 @@ public sealed class ImportService(
                 Location: row.Location));
 
             // Same as a single add: give each imported card a starting price point.
+            // A card seeded from the catalogue has no prices to record yet; the pass
+            // below is what fills those in.
             snapshots.RecordCurrentPrices(row.CardId);
+            outcomes.Add(new CommitOutcome(row.Index, row.CardId, true, null));
             added++;
         }
 
+        // One paced pass rather than one background task per card: a hundred-row batch
+        // would otherwise open a hundred simultaneous connections to an API that
+        // struggles with one.
+        snapshots.QueueEnrichMany(seeded);
+
         if (_jobs.TryGetValue(jobId, out var job)) job.State = "committed";
-        return added;
+        return new CommitResult(added, outcomes);
     }
 
     // ------------------------------------------------------------ normalisation
