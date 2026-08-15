@@ -16,6 +16,7 @@ Card artwork, set details, attack stats and market prices come from
 - **Values your collection** against TCGplayer market prices, including
   unrealised gain against purchase price.
 - **Optional password protection**, for when the network isn't fully trusted.
+- **Nameable**, so two of these running side by side are easy to tell apart.
 - **Tracks where cards physically are**, so the app can tell you not just what you
   own but where to find it.
 - **Keeps a want list** with the price you'd pay, and flags cards when the market
@@ -319,6 +320,12 @@ the `POKEMONTCG_API_KEY` environment variable both still work:
 ```
 
 A key saved through the UI takes precedence over both.
+
+**Name your vault** in the same tab, if you like. Whatever you type replaces
+"CardVault" in the header and the browser tab, which matters mainly when you run
+more than one of these — the tab strip is where you tell them apart. Clearing the
+box puts the default back. It's a label and nothing more: the cards, the data
+directory and everything on disk are unaffected.
 
 > **The API can't verify keys.** A correct key, a mistyped key and no key at all
 > all get an identical 200 response with no rate-limit headers to compare, so
