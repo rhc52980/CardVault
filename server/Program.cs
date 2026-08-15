@@ -83,6 +83,7 @@ builder.Services.AddSingleton<IPriceSource, EbayPriceSource>();
 
 builder.Services.AddSingleton<PriceSnapshotService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<PriceSnapshotService>());
+builder.Services.AddSingleton<ImportBatchService>();
 builder.Services.AddSingleton<ImportService>();
 builder.Services.AddSingleton<SetsService>();
 builder.Services.AddSingleton<SalesService>();
@@ -827,6 +828,30 @@ app.MapPost("/api/import/{jobId}/commit", (string jobId, CommitRequest req, Impo
     // the rows that landed rather than leaving you to work out which of a hundred
     // cards the count is missing.
     return Results.Ok(import.Commit(jobId, req.Rows));
+});
+
+// ------------------------------------------------------------- imports as batches
+
+app.MapGet("/api/imports", (ImportBatchService batches) => Results.Ok(batches.List()));
+
+app.MapGet("/api/imports/{id}", (string id, ImportBatchService batches)
+    => batches.Get(id) is { } batch ? Results.Ok(batch) : Results.NotFound());
+
+app.MapPost("/api/imports/{id}/acknowledge", (string id, ImportBatchService batches) =>
+{
+    batches.Acknowledge(id);
+    return batches.Get(id) is { } batch ? Results.Ok(batch) : Results.NotFound();
+});
+
+app.MapPost("/api/imports/acknowledge", (ImportBatchService batches)
+    => Results.Ok(new { acknowledged = batches.AcknowledgeAll() }));
+
+// Removes the cards an import added. Sales and price history are deliberately left
+// alone — see ImportBatchService.Remove for why neither is at risk.
+app.MapDelete("/api/imports/{id}", (string id, ImportBatchService batches) =>
+{
+    var (found, removed) = batches.Remove(id);
+    return found ? Results.Ok(new { removed }) : Results.NotFound();
 });
 
 app.MapGet("/api/import/template", () =>

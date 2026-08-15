@@ -25,7 +25,8 @@ public sealed class CollectionService(Db db, SettingsService settings, IEnumerab
                (SELECT p.market FROM price_history p
                  WHERE p.card_id = c.card_id AND p.variant = c.variant
                    AND p.currency = $currency AND p.market IS NOT NULL
-                 ORDER BY p.captured_on DESC LIMIT 1)
+                 ORDER BY p.captured_on DESC LIMIT 1),
+               c.import_batch
         FROM collection c
         JOIN cards k ON k.id = c.card_id
         """;
@@ -50,19 +51,25 @@ public sealed class CollectionService(Db db, SettingsService settings, IEnumerab
     private string PreferredCurrency()
         => sources.FirstOrDefault(s => s.Id == settings.PreferredPriceSource)?.Currency ?? "USD";
 
-    public long Add(AddEntryRequest req)
+    /// <summary>
+    /// Adds one entry. <paramref name="importBatch"/> ties it to the CSV import it
+    /// arrived in; null for a card added by hand, which belongs to no batch and so is
+    /// never marked unreviewed nor caught by a batch removal.
+    /// </summary>
+    public long Add(AddEntryRequest req, string? importBatch = null)
     {
         using var conn = db.Open();
         using var cmd = conn.CreateCommand();
         cmd.CommandText = """
             INSERT INTO collection (card_id, quantity, variant, condition, grade,
                                     purchase_price, purchase_date, notes, manual_value,
-                                    location, added_at)
+                                    location, added_at, import_batch)
             VALUES ($cardId, $quantity, $variant, $condition, $grade,
                     $purchasePrice, $purchaseDate, $notes, $manualValue,
-                    $location, $addedAt);
+                    $location, $addedAt, $importBatch);
             SELECT last_insert_rowid();
             """;
+        cmd.Parameters.AddWithValue("$importBatch", (object?)importBatch ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$cardId", req.CardId);
         cmd.Parameters.AddWithValue("$quantity", Math.Max(1, req.Quantity));
         cmd.Parameters.AddWithValue("$variant", req.Variant);
@@ -116,6 +123,13 @@ public sealed class CollectionService(Db db, SettingsService settings, IEnumerab
         else Set("purchase_price", "purchasePrice", req.PurchasePrice);
 
         if (sets.Count == 0) return true;
+
+        // Records that this entry is no longer as it was imported. A partial sale ends
+        // up here too, which is the point: removing an import batch can then tell you
+        // how many of its cards you've since corrected or sold part of, rather than
+        // taking those changes with it and saying nothing.
+        sets.Add("modified_at = $modifiedAt");
+        pars["$modifiedAt"] = DateTime.UtcNow.ToString("o");
 
         using var conn = db.Open();
         using var cmd = conn.CreateCommand();
@@ -294,6 +308,7 @@ public sealed class CollectionService(Db db, SettingsService settings, IEnumerab
             PricesUpdatedAt: Pricing.TcgUpdatedAt(card),
             ManualValue: manualValue,
             IsCustom: isCustom,
-            Location: r.IsDBNull(26) ? null : r.GetString(26));
+            Location: r.IsDBNull(26) ? null : r.GetString(26),
+            ImportBatch: r.IsDBNull(28) ? null : r.GetString(28));
     }
 }

@@ -47,6 +47,8 @@ export interface CollectionItem {
   purchaseDate?: string | null
   notes?: string | null
   addedAt: string
+  /** The CSV import this card came in on, or null if it was added by hand. */
+  importBatch?: string | null
   marketPrice?: number | null
   lowPrice?: number | null
   highPrice?: number | null
@@ -405,6 +407,20 @@ export interface CommitOutcome {
 export interface CommitResult {
   added: number
   rows: CommitOutcome[]
+}
+
+/** A CSV import that put cards in the collection, and what has become of them. */
+export interface ImportBatchSummary {
+  id: string
+  createdAt: string
+  /** Null until you've looked over what came in. */
+  acknowledgedAt?: string | null
+  /** Entries from this import still in the collection. */
+  entries: number
+  /** Cards, counting quantities rather than rows. */
+  cards: number
+  /** How many of those entries you've edited or partly sold since. */
+  modified: number
 }
 
 /** Full card payload straight from pokemontcg.io, used by the detail panel. */
