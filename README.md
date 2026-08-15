@@ -29,7 +29,9 @@ Card artwork, set details, attack stats and market prices come from
   open one to see the full checklist as a binder page — cards you own in colour,
   everything missing greyed out, with what it would cost to finish.
 - **Bulk imports a CSV** of an existing collection, matching each row against the
-  catalogue and letting you review every match before anything is saved.
+  catalogue and letting you review every match before anything is saved. Each
+  import stays identifiable afterwards, so a batch can be checked over in the vault
+  — or removed outright — without touching your sales or price history.
 - **Charts each card's price over time**, built from history the app records
   itself.
 - **Records its own price history.** The API only ever reports today's price, so
@@ -256,6 +258,47 @@ The review list stays put after you add cards, with the successful rows ticked o
 so you can work through whatever needed attention and add those too. Anything still
 unresolved can be downloaded as a CSV — carrying what your file said rather than
 what the import suspected — ready to correct and re-import.
+
+Card artwork in the review list is large by default, because this is the screen
+where a card gets checked against its picture. Small and medium are a click away for
+skimming a long file, the choice is remembered, and clicking any card opens the
+full-size scan — a wrong art variant of the right card is the one mistake the row
+text can't describe.
+
+## Reviewing and undoing an import
+
+Importing a scanned collection means committing cards a hundred at a time, and the
+mistake that matters is the one you don't notice until later. So an import isn't
+just a pile of cards that appeared: it's a **batch** you can find again.
+
+Cards from an import you haven't looked over are ringed in the vault, under a banner
+saying what arrived and when:
+
+> **3 cards** imported 15 Aug, 5:10 PM — not checked yet
+> · Show only these · Looks right · Remove these
+
+The banner stays until you acknowledge it rather than fading on a timer. The point is
+that it survives closing the tab and is still there tomorrow, so a batch can't be
+quietly forgotten half-checked. Any import can also be picked from a filter beside
+the set and location ones, so "the one from Tuesday" is findable days later —
+acknowledged or not.
+
+**Remove these** deletes the cards that import added, and deliberately nothing else:
+
+- **Your sold ledger is untouched.** A sale keeps its own copy of the card it was
+  made from and holds no reference back to the entry, so recorded sales and the
+  profit computed from them survive. A card sold outright has already left the
+  collection, so it isn't there to remove in the first place.
+- **Price history is untouched.** It's keyed by card rather than by entry, shared
+  with everything else you own, and the one thing here that can't be fetched again.
+- **A backup is taken first**, every time, whatever you answer.
+- Entries you've **edited or partly sold** since importing are counted and named in
+  the confirmation — *"Remove 100, including 3 you've changed"* — so your own
+  corrections never disappear without being mentioned.
+
+Cards added by hand belong to no batch, as do any that predate this feature. Neither
+is ever flagged as unreviewed or caught by a removal. A batch with nothing left in it
+stops being offered, since there's nothing to review or undo.
 
 ## Setup
 
@@ -503,11 +546,12 @@ with or endorsed by any of them.
 server/            ASP.NET Core API + static host
   Data/DataPaths.cs  Resolves the per-user data directory, migrates old installs
   Data/Db.cs       SQLite schema: cards, collection, wants, sales,
-                   price_history, sets, sessions, settings, plus additive
-                   migrations for existing databases
+                   price_history, sets, sessions, settings, import_batches,
+                   plus additive migrations for existing databases
   Services/        API client, card cache, collection, pricing, image cache,
                    daily price snapshots, sets + completion, custom items,
-                   CSV parser and import jobs, want list, sales ledger, export,
+                   CSV parser, import jobs and import batches, want list,
+                   sales ledger, export,
                    authentication, settings, backups
   Program.cs       Minimal API endpoints
 brand/             Source artwork; everything under client/public/ is generated
