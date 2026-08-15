@@ -543,6 +543,7 @@ app.MapGet("/api/settings", async (
 
     return Results.Ok(new
     {
+        vaultName = settings.VaultName,
         apiKey = settings.GetApiKeyStatus(),
         ebay = settings.GetEbayStatus(),
         scrydex = settings.GetScrydexStatus(),
@@ -577,6 +578,14 @@ app.MapPost("/api/settings/update-check", async (
         releaseUrl = updates.ReleaseUrl,
         lastCheckedUtc = updates.LastCheckedUtc,
     });
+});
+
+// Blank is a legitimate value here — it means "go back to the default name" — so
+// this deliberately doesn't reject an empty string the way the API key does.
+app.MapPut("/api/settings/vault-name", (VaultNameRequest req, SettingsService settings) =>
+{
+    settings.VaultName = req.Name ?? "";
+    return Results.Ok(new { vaultName = settings.VaultName });
 });
 
 app.MapPut("/api/settings/api-key", async (

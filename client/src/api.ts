@@ -335,6 +335,15 @@ export const api = {
     return fetch(`/api/import/${jobId}`).then(json<ImportJob>)
   },
 
+  /** Renames the vault. An empty name restores the default. */
+  setVaultName(name: string) {
+    return fetch('/api/settings/vault-name', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name }),
+    }).then(json<{ vaultName: string }>)
+  },
+
   /** Imports that still have cards in the collection, newest first. */
   importBatches() {
     return fetch('/api/imports').then(json<ImportBatchSummary[]>)
