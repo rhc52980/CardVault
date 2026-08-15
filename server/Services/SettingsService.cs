@@ -26,6 +26,33 @@ public sealed class SettingsService(Db db, IConfiguration config)
     private const string EbayClientSecretSetting = "ebay_client_secret";
     private const string ScrydexApiKeySetting = "scrydex_api_key";
     private const string ScrydexTeamIdSetting = "scrydex_team_id";
+    private const string VaultNameSetting = "vault_name";
+
+    /// <summary>The name shown when nothing has been chosen.</summary>
+    public const string DefaultVaultName = "CardVault";
+
+    /// <summary>
+    /// What this collection is called, in the header and the browser tab.
+    ///
+    /// Purely a label — it names the one collection this instance holds rather than
+    /// selecting between several. Blank means the default, so clearing the box gets
+    /// you back to "CardVault" rather than an app with no name at the top of it.
+    /// </summary>
+    public string VaultName
+    {
+        get => Get(VaultNameSetting) is { Length: > 0 } name ? name : DefaultVaultName;
+        set
+        {
+            var trimmed = value.Trim();
+
+            // Capped because it sits in a header beside the version and in a browser
+            // tab, both of which simply truncate anything longer without saying so.
+            if (trimmed.Length > 60) trimmed = trimmed[..60].TrimEnd();
+
+            if (trimmed.Length == 0 || trimmed == DefaultVaultName) Delete(VaultNameSetting);
+            else Set(VaultNameSetting, trimmed);
+        }
+    }
 
     /// <summary>
     /// Which market drives valuation. One source, never a blend — they report

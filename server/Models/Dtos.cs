@@ -156,6 +156,9 @@ public sealed record ValuePoint(string Date, double Value);
 
 public sealed record ApiKeyRequest(string? ApiKey);
 
+/// <summary>What to call this collection. Empty or null restores the default.</summary>
+public sealed record VaultNameRequest(string? Name);
+
 /// <summary>eBay application credentials, entered together since neither works alone.</summary>
 public sealed record EbayCredentialsRequest(string? ClientId, string? ClientSecret);
 

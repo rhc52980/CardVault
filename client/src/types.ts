@@ -302,6 +302,8 @@ export interface AppSettings {
   migratedFromLegacy: boolean
   legacyDirectory: string
   backups: BackupInfo[]
+  /** What this collection is called. Defaults to "CardVault" when unset. */
+  vaultName: string
   /** From <Version> in the csproj; release builds append a source stamp. */
   version: string
   buildDate: string
