@@ -203,7 +203,8 @@ snapshot.
 Drop a file on the **Import CSV** tab, or paste rows directly. Column headers are
 matched loosely, so most exports work unmodified — `Card Name`, `card_name` and
 `Product Name` all map to the same field. Download a starter template from the
-import screen.
+import screen, or see [docs/csv-format.md](docs/csv-format.md) for the full
+reference — including how to produce a file from scanned cards.
 
 Include either a **card name** or a **set and number**; everything else is
 optional:
@@ -227,18 +228,34 @@ Values are normalised on the way in: `$250.00` becomes 250, `Lightly Played` and
 printing the card was never issued in (a reverse holo that doesn't exist), the
 import falls back to a real printing and says so.
 
-Every row lands in one of five states, and **nothing is written to your
+Every row lands in one of six states, and **nothing is written to your
 collection until you press the button**:
 
 - **Matched** — resolved to exactly one card, ticked and ready
 - **Needs a choice** — several cards fit, so pick the right printing from a dropdown
+- **Check this one** — the row's card id resolved, but to a card the row's own name
+  or number disagrees with. Both readings are shown beside the artwork and the row
+  can't be added without a decision
 - **Not found** — nothing in the catalogue matched
 - **Lookup failed** — the API was unreachable for that row; re-run to retry it
 - **Incomplete** — the row had nothing to search on
 
-Resolution runs as a background job with a progress bar, because a large file
-means one API lookup per unseen card. Rows whose cards are already in the local
-cache resolve instantly, so re-importing is fast.
+"Check this one" exists because a card doesn't carry its pokemontcg.io id anywhere
+on it. Anything filling in a `Card ID` column is inferring it from the set symbol,
+and an inferred id that's wrong is still valid — it resolves to exactly one real
+card and would otherwise look every bit as matched as a correct one. Including a
+name or number beside the id is what makes that catchable.
+
+Resolution runs as a background job with a progress bar. Rows resolve instantly from
+the [offline catalogue](#searching) and from cards you already hold; only what
+neither knows about is looked up over the network, one row at a time. With the
+catalogue downloaded, a file of cards you've never added before still resolves in
+seconds.
+
+The review list stays put after you add cards, with the successful rows ticked off,
+so you can work through whatever needed attention and add those too. Anything still
+unresolved can be downloaded as a CSV — carrying what your file said rather than
+what the import suspected — ready to correct and re-import.
 
 ## Setup
 
@@ -499,8 +516,10 @@ install/           Windows installer/updater, launcher and desktop shortcut
 linux/             systemd unit and install.sh
 tools/             generate-icons.py — regenerates the raster app icons from
                    the same design as client/public/favicon.svg
-tests/             xunit tests (`dotnet test tests`) — currently the search
-                   query parser, where the name-vs-number rules live
+tests/             xunit tests (`dotnet test tests`) — the search query parser,
+                   where the name-vs-number rules live, and the card-id
+                   cross-check that guards CSV imports
+docs/              csv-format.md — the import format in full
 client/            React frontend (builds into server/wwwroot)
   src/components/  Card grid, search, set browser, detail modal, price chart,
                    stats, CSV import, manual entry, want list, sell + sold
