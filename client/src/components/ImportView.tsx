@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { api, cardImage, money } from '../api'
 import { CONDITIONS, CONDITION_LABELS, prettyVariant } from '../lib/cardStyles'
+import { Modal } from './Modal'
 import type {
   AddEntryRequest,
   CommitOutcome,
@@ -28,6 +29,22 @@ const RESOLVABLE: ImportStatus[] = ['Matched', 'Ambiguous', 'Mismatch']
 /** Statuses that offer a list to choose from rather than a single answer. */
 const CHOOSABLE: ImportStatus[] = ['Ambiguous', 'Mismatch']
 
+/**
+ * How big the artwork is in the review list.
+ *
+ * This screen exists to be looked at — it is where a scan gets checked against the
+ * card it resolved to — and a thumbnail too small to read the name off defeats the
+ * purpose. Large is the default for that reason; small is there for skimming a long
+ * file once you already trust the matching.
+ */
+type CardSize = 'small' | 'medium' | 'large'
+
+const CARD_SIZES: { key: CardSize; label: string; className: string }[] = [
+  { key: 'small', label: 'Small', className: 'h-16' },
+  { key: 'medium', label: 'Medium', className: 'h-28' },
+  { key: 'large', label: 'Large', className: 'h-44' },
+]
+
 /** Local editing state layered over what the server resolved. */
 interface RowEdit {
   include: boolean
@@ -49,6 +66,17 @@ export function ImportView({ onImported }: { onImported: () => void }) {
   const [lastCommit, setLastCommit] = useState<CommitResult | null>(null)
   const [filter, setFilter] = useState<ImportStatus | null>(null)
   const [dragging, setDragging] = useState(false)
+  const [zoomed, setZoomed] = useState<{ cardId: string; name: string } | null>(null)
+
+  // Remembered, like the vault's own view preferences: how closely you want to look
+  // at a batch is a habit rather than something to re-pick on every import.
+  const [cardSize, setCardSize] = useState<CardSize>(
+    () => (localStorage.getItem('import.cardSize') as CardSize) ?? 'large',
+  )
+
+  useEffect(() => {
+    localStorage.setItem('import.cardSize', cardSize)
+  }, [cardSize])
   const fileRef = useRef<HTMLInputElement>(null)
 
   // Poll while the server resolves rows against the catalogue.
@@ -297,6 +325,20 @@ export function ImportView({ onImported }: { onImported: () => void }) {
               ))}
           </div>
           <div className="flex items-center gap-2">
+            <div className="flex items-center rounded-lg border border-edge p-0.5 text-xs">
+              {CARD_SIZES.map((s) => (
+                <button
+                  key={s.key}
+                  onClick={() => setCardSize(s.key)}
+                  title={`${s.label} artwork`}
+                  className={`rounded-md px-2 py-1 transition ${
+                    cardSize === s.key ? 'bg-arc text-white' : 'text-mute hover:text-bright'
+                  }`}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
             <button onClick={reset} className="rounded-lg px-3 py-2 text-sm text-mute transition hover:bg-white/5 hover:text-bright">
               Start over
             </button>
@@ -354,6 +396,8 @@ export function ImportView({ onImported }: { onImported: () => void }) {
               row={row}
               edit={edits[row.index]}
               outcome={results[row.index]}
+              cardSize={cardSize}
+              onZoom={(cardId, name) => setZoomed({ cardId, name })}
               onChange={(patch) => update(row.index, patch)}
               onPickCandidate={(cardId) => pickCandidate(row, cardId)}
             />
@@ -364,6 +408,23 @@ export function ImportView({ onImported }: { onImported: () => void }) {
             </p>
           )}
         </div>
+
+        {/* Full-size art, for when even the large thumbnail leaves it in doubt —
+            a wrong art variant of the right card is the one mistake the row text
+            cannot tell you about. */}
+        {zoomed && (
+          <Modal onClose={() => setZoomed(null)}>
+            <div className="p-4">
+              <img
+                src={cardImage(zoomed.cardId, 'large')}
+                alt={zoomed.name}
+                className="mx-auto w-full rounded-lg"
+              />
+              <p className="mt-3 text-center text-sm text-bright">{zoomed.name}</p>
+              <p className="text-center text-xs text-mute">{zoomed.cardId}</p>
+            </div>
+          </Modal>
+        )}
       </div>
     )
   }
@@ -488,12 +549,16 @@ function ImportRowCard({
   row,
   edit,
   outcome,
+  cardSize,
+  onZoom,
   onChange,
   onPickCandidate,
 }: {
   row: ImportRow
   edit?: RowEdit
   outcome?: CommitOutcome
+  cardSize: CardSize
+  onZoom: (cardId: string, name: string) => void
   onChange: (patch: Partial<RowEdit>) => void
   onPickCandidate: (cardId: string) => void
 }) {
@@ -512,6 +577,7 @@ function ImportRowCard({
   const shownName = chosen?.name ?? row.name
   const shownSetName = chosen?.setName ?? row.setName
   const shownNumber = chosen?.number ?? row.number
+  const sizeClass = CARD_SIZES.find((s) => s.key === cardSize)?.className ?? 'h-44'
 
   return (
     <div
@@ -532,16 +598,23 @@ function ImportRowCard({
         )}
 
         {edit?.cardId ? (
-          <img
-            src={cardImage(edit.cardId, 'small')}
-            alt=""
-            className="h-16 w-auto shrink-0 rounded ring-1 ring-white/10"
-            onError={(e) => {
-              if (row.imageSmall) (e.currentTarget as HTMLImageElement).src = row.imageSmall
-            }}
-          />
+          <button
+            type="button"
+            onClick={() => onZoom(edit.cardId!, shownName ?? row.source)}
+            title="See the full-size artwork"
+            className="shrink-0 rounded focus:ring-2 focus:ring-arc focus:outline-none"
+          >
+            <img
+              src={cardImage(edit.cardId, 'small')}
+              alt=""
+              className={`${sizeClass} w-auto rounded ring-1 ring-white/10 transition hover:ring-arc/60`}
+              onError={(e) => {
+                if (row.imageSmall) (e.currentTarget as HTMLImageElement).src = row.imageSmall
+              }}
+            />
+          </button>
         ) : (
-          <div className="h-16 w-[46px] shrink-0 rounded bg-abyss ring-1 ring-white/5" />
+          <div className={`${sizeClass} aspect-[245/342] shrink-0 rounded bg-abyss ring-1 ring-white/5`} />
         )}
 
         <div className="min-w-0 flex-1">
