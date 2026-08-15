@@ -527,6 +527,23 @@ public sealed class CatalogueService(
         return dot > 0 ? $"{small[..dot]}_hires{small[dot..]}" : small;
     }
 
+    /// <summary>
+    /// Where a catalogue card's artwork lives upstream, for cards we know about but
+    /// hold no payload for.
+    ///
+    /// Import review is the case that needs this: rows resolved from the catalogue are
+    /// not in <c>cards</c> until they're committed, so the on-demand image cache has
+    /// nowhere to look and the review list draws empty boxes — in the one screen whose
+    /// entire job is letting you check a card against its picture. Downloading the
+    /// catalogue's own artwork avoids the fetch altogether; this covers the case where
+    /// it was skipped.
+    /// </summary>
+    public string? RemoteImageUrl(string cardId, string size)
+    {
+        var small = ImageUrlFor(cardId);
+        return size == "large" ? LargeUrl(small) : small;
+    }
+
     /// <summary>The stored artwork for a card, or null if it wasn't downloaded.</summary>
     public string? ImageFile(string cardId)
     {

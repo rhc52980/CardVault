@@ -8,7 +8,8 @@ namespace CardVault.Services;
 /// change, so this makes the grid instant on repeat visits and keeps the collection
 /// viewable with no internet connection.
 /// </summary>
-public sealed class ImageCache(Db db, DataPaths paths, HttpClient http, ILogger<ImageCache> log)
+public sealed class ImageCache(
+    Db db, DataPaths paths, CatalogueService catalogue, HttpClient http, ILogger<ImageCache> log)
 {
     private readonly string _dir = paths.ImagesDirectory;
 
@@ -57,6 +58,11 @@ public sealed class ImageCache(Db db, DataPaths paths, HttpClient http, ILogger<
         using var cmd = conn.CreateCommand();
         cmd.CommandText = $"SELECT image_{size} FROM cards WHERE id = $id";
         cmd.Parameters.AddWithValue("$id", cardId);
-        return cmd.ExecuteScalar() as string;
+        if (cmd.ExecuteScalar() as string is { Length: > 0 } known) return known;
+
+        // Nothing owned by that id. It may still be a card we know of from the offline
+        // catalogue — an import row mid-review is exactly that, resolved but not yet
+        // committed — and the review list is no use with the pictures missing.
+        return catalogue.RemoteImageUrl(cardId, size);
     }
 }

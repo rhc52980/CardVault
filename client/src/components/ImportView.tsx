@@ -502,6 +502,17 @@ function ImportRowCard({
   const variants = edit?.variants?.length ? edit.variants : row.variants
   const added = outcome?.added === true
 
+  // Once a different card has been chosen, the row describes that one. Without this
+  // the picture swaps but the heading doesn't, so confirming a mismatched row leaves
+  // it still captioned with the name you just rejected.
+  const chosen =
+    edit?.cardId && edit.cardId !== row.cardId
+      ? row.candidates.find((c) => c.cardId === edit.cardId)
+      : undefined
+  const shownName = chosen?.name ?? row.name
+  const shownSetName = chosen?.setName ?? row.setName
+  const shownNumber = chosen?.number ?? row.number
+
   return (
     <div
       className={`panel rounded-xl p-3 transition ${added ? 'opacity-50' : edit?.include ? '' : 'opacity-60'} ${
@@ -515,7 +526,7 @@ function ImportRowCard({
             checked={edit?.include ?? false}
             disabled={!edit?.cardId}
             onChange={(e) => onChange({ include: e.target.checked })}
-            aria-label={`Include ${row.name ?? 'row'}`}
+            aria-label={`Include ${shownName ?? 'row'}`}
             className="mt-1 h-4 w-4 shrink-0 accent-[color:var(--color-arc)]"
           />
         )}
@@ -542,10 +553,10 @@ function ImportRowCard({
             >
               {added ? 'Added' : style.label}
             </span>
-            <span className="truncate font-medium text-bright">{row.name ?? '—'}</span>
-            {row.setName && (
+            <span className="truncate font-medium text-bright">{shownName ?? '—'}</span>
+            {shownSetName && (
               <span className="truncate text-xs text-mute">
-                {row.setName} · #{row.number}
+                {shownSetName} · #{shownNumber}
               </span>
             )}
             {row.marketPrice != null && (
