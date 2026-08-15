@@ -31,7 +31,13 @@ function when(iso: string) {
   return Number.isNaN(d.getTime()) ? iso : d.toLocaleString()
 }
 
-export function SettingsView({ onAuthChanged }: { onAuthChanged: () => void }) {
+export function SettingsView({
+  onAuthChanged,
+  onVaultRenamed,
+}: {
+  onAuthChanged: () => void
+  onVaultRenamed: (name: string) => void
+}) {
   const [settings, setSettings] = useState<AppSettings | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -52,6 +58,7 @@ export function SettingsView({ onAuthChanged }: { onAuthChanged: () => void }) {
   return (
     <div className="max-w-3xl space-y-5">
       <VersionCard settings={settings} onChanged={load} />
+      <VaultNameCard settings={settings} onRenamed={onVaultRenamed} onChanged={load} />
       <AppearanceCard />
       <PriceSourcesCard />
       <SecurityCard onAuthChanged={onAuthChanged} />
@@ -62,6 +69,77 @@ export function SettingsView({ onAuthChanged }: { onAuthChanged: () => void }) {
       <DataCard settings={settings} />
       <BackupsCard settings={settings} onChanged={load} />
     </div>
+  )
+}
+
+// ---------------------------------------------------------------- vault name
+
+function VaultNameCard({
+  settings,
+  onRenamed,
+  onChanged,
+}: {
+  settings: AppSettings
+  onRenamed: (name: string) => void
+  onChanged: () => void
+}) {
+  const [value, setValue] = useState(settings.vaultName)
+  const [busy, setBusy] = useState(false)
+  const [saved, setSaved] = useState(false)
+
+  const dirty = value.trim() !== settings.vaultName
+
+  async function save() {
+    setBusy(true)
+    try {
+      const { vaultName } = await api.setVaultName(value)
+      // The header and the tab title both live in App, so tell it rather than
+      // making a rename the one setting that needs a reload to take effect.
+      onRenamed(vaultName)
+      setValue(vaultName)
+      setSaved(true)
+      onChanged()
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <section className="panel rounded-xl p-4">
+      <h2 className="font-medium text-bright">What this vault is called</h2>
+      <p className="mt-1 text-sm text-mute">
+        Shown in the header and the browser tab. Worth setting if you run more than one
+        of these — the tab strip is where you tell them apart. Naming it changes nothing
+        about the cards themselves.
+      </p>
+
+      <div className="mt-3 flex flex-wrap gap-2">
+        <input
+          value={value}
+          onChange={(e) => {
+            setValue(e.target.value)
+            setSaved(false)
+          }}
+          onKeyDown={(e) => e.key === 'Enter' && dirty && save()}
+          placeholder="CardVault"
+          maxLength={60}
+          className={`${field} min-w-[240px] flex-1`}
+        />
+        <button
+          onClick={save}
+          disabled={busy || !dirty}
+          className="rounded-lg bg-arc px-4 py-2 text-sm font-medium text-white transition hover:brightness-110 disabled:opacity-40"
+        >
+          {busy ? 'Saving…' : 'Save name'}
+        </button>
+      </div>
+
+      <p className="mt-2 text-xs text-mute">
+        {saved && !dirty
+          ? 'Saved.'
+          : 'Leave it empty to go back to CardVault.'}
+      </p>
+    </section>
   )
 }
 

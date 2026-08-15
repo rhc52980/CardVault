@@ -25,6 +25,7 @@ export default function App() {
   const [auth, setAuth] = useState<AuthStatus | null>(null)
   const [appVersion, setAppVersion] = useState('')
   const [buildDate, setBuildDate] = useState('')
+  const [vaultName, setVaultName] = useState('CardVault')
   const [updateAvailable, setUpdateAvailable] = useState<{ latest?: string | null; url?: string | null } | null>(null)
 
   const checkAuth = useCallback(async () => {
@@ -51,6 +52,7 @@ export default function App() {
         .then((s) => {
           setAppVersion(s.version.split('+')[0])
           setBuildDate(s.buildDate)
+          setVaultName(s.vaultName)
           setUpdateAvailable(
             s.update.available ? { latest: s.update.latest, url: s.update.releaseUrl } : null,
           )
@@ -69,6 +71,12 @@ export default function App() {
   useEffect(() => {
     void checkAuth().then(refresh)
   }, [checkAuth, refresh])
+
+  // The tab title too, not just the header — with several of these open, the tab
+  // strip is where you actually tell one from another.
+  useEffect(() => {
+    document.title = vaultName
+  }, [vaultName])
 
   if (!auth) return <div className="aurora min-h-full" />
 
@@ -97,7 +105,7 @@ export default function App() {
             />
             <div>
               <h1 className="text-xl font-semibold tracking-tight">
-                CardVault
+                {vaultName}
                 {appVersion && (
                   <span
                     className="ml-2 align-middle font-mono text-[11px] font-normal text-mute"
@@ -180,6 +188,7 @@ export default function App() {
               onAuthChanged={() => {
                 void checkAuth().then(refresh)
               }}
+              onVaultRenamed={setVaultName}
             />
           )}
         </main>
