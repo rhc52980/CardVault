@@ -2,9 +2,9 @@ import { useEffect, useMemo, useState } from 'react'
 import { api, cardImage, money } from '../api'
 import { rarityClass } from '../lib/cardStyles'
 import type { CollectionItem, ImportBatchSummary } from '../types'
+import { ImportsView } from './ImportsView'
 import { CardDetail } from './CardDetail'
 import { CardTile } from './CardTile'
-import { ConfirmButton } from './ConfirmButton'
 import { ManualEntryDialog } from './ManualEntryDialog'
 import { SoldView } from './SoldView'
 import { WantedView } from './WantedView'
@@ -40,7 +40,7 @@ export function CollectionView({
   const [manualOpen, setManualOpen] = useState(false)
   // Owned and sold are two views of the same collection, so they share a screen
   // rather than eating another slot in the top nav.
-  const [pane, setPane] = useState<'owned' | 'wanted' | 'sold'>('owned')
+  const [pane, setPane] = useState<'owned' | 'imports' | 'wanted' | 'sold'>('owned')
   const [locationFilter, setLocationFilter] = useState('')
   const [batchFilter, setBatchFilter] = useState('')
   const [batches, setBatches] = useState<ImportBatchSummary[]>([])
@@ -60,16 +60,17 @@ export function CollectionView({
   const unreviewed = useMemo(() => batches.filter((b) => !b.acknowledgedAt), [batches])
   const unreviewedIds = useMemo(() => new Set(unreviewed.map((b) => b.id)), [unreviewed])
 
-  async function acknowledge(id: string) {
-    await api.acknowledgeImport(id)
-    setBatches(await api.importBatches())
-  }
-
-  async function removeBatch(id: string) {
-    await api.removeImport(id)
-    if (batchFilter === id) setBatchFilter('')
-    // The cards are gone, so the collection itself has to be re-read; that in turn
-    // re-runs the effect above and refreshes the batch list.
+  /**
+   * Re-reads batches after the imports pane changes something.
+   *
+   * Also drops the batch filter if that batch has just been removed — otherwise
+   * the vault would keep filtering on an import that no longer exists and look
+   * empty for no visible reason.
+   */
+  async function refreshBatches() {
+    const next = await api.importBatches()
+    setBatches(next)
+    if (batchFilter && !next.some((b) => b.id === batchFilter)) setBatchFilter('')
     onChanged()
   }
 
@@ -177,6 +178,7 @@ export function CollectionView({
         {(
           [
             ['owned', 'Owned'],
+            ['imports', unreviewed.length ? `Imports (${unreviewed.length})` : 'Imports'],
             ['wanted', 'Wanted'],
             ['sold', 'Sold'],
           ] as const
@@ -229,6 +231,22 @@ export function CollectionView({
       </div>
     </div>
   )
+
+  if (pane === 'imports') {
+    return (
+      <div className="space-y-5">
+        {header}
+        <ImportsView
+          batches={batches}
+          onChanged={refreshBatches}
+          onShowOnly={(id) => {
+            setBatchFilter(id)
+            setPane('owned')
+          }}
+        />
+      </div>
+    )
+  }
 
   if (pane === 'sold') {
     return (
@@ -283,65 +301,26 @@ export function CollectionView({
     <div className="space-y-5">
       {header}
 
-      {/* Imports you haven't looked over yet. Stays until acknowledged rather than
-          fading on a timer: the point is to survive closing the tab and still be
-          here tomorrow, so a batch can't be quietly forgotten half-checked. */}
+      {/* One line rather than the stack of banners this used to be — six unchecked
+          imports made a wall of them above the cards. The full list moved to its
+          own pane, but something has to stay here: the whole point of these is
+          that a batch can't be quietly forgotten half-checked, and hiding them
+          entirely behind a button would give that up. */}
       {unreviewed.length > 0 && (
-        <div className="panel space-y-2 rounded-xl px-4 py-3">
-          {unreviewed.map((batch) => (
-            <div key={batch.id} className="flex flex-wrap items-center justify-between gap-3">
-              <p className="text-sm">
-                <span className="text-bright">
-                  {batch.cards.toLocaleString()} {batch.cards === 1 ? 'card' : 'cards'}
-                </span>
-                <span className="text-mute">
-                  {' '}imported {new Date(batch.createdAt).toLocaleString()} — not checked yet
-                </span>
-                {batch.modified > 0 && (
-                  <span className="text-mute">
-                    {' '}· {batch.modified} edited or partly sold since
-                  </span>
-                )}
-              </p>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setBatchFilter(batchFilter === batch.id ? '' : batch.id)}
-                  className="rounded-md px-2 py-1 text-xs text-mute transition hover:bg-white/5 hover:text-bright"
-                >
-                  {batchFilter === batch.id ? 'Show everything' : 'Show only these'}
-                </button>
-                <button
-                  onClick={() => void acknowledge(batch.id)}
-                  className="rounded-md bg-arc px-2.5 py-1 text-xs font-medium text-white transition hover:brightness-110"
-                >
-                  Looks right
-                </button>
-                <ConfirmButton
-                  onConfirm={() => removeBatch(batch.id)}
-                  label="Remove these"
-                  title="Deletes the cards this import added. Your sold ledger and price history are untouched."
-                  confirm={
-                    batch.modified > 0
-                      ? `Remove ${batch.entries}, including ${batch.modified} you've changed`
-                      : `Remove all ${batch.entries}`
-                  }
-                />
-              </div>
-            </div>
-          ))}
-
-          {unreviewed.length > 1 && (
-            <button
-              onClick={async () => {
-                await api.acknowledgeAllImports()
-                setBatches(await api.importBatches())
-              }}
-              className="text-xs text-mute underline-offset-2 transition hover:text-bright hover:underline"
-            >
-              Mark all {unreviewed.length} as checked
-            </button>
-          )}
-        </div>
+        <button
+          onClick={() => setPane('imports')}
+          className="panel flex w-full items-center justify-between gap-3 rounded-xl px-4 py-2.5 text-left transition hover:border-gold/50"
+        >
+          <span className="text-sm">
+            <span className="text-gold">
+              {unreviewed.length} {unreviewed.length === 1 ? 'import' : 'imports'} not checked yet
+            </span>
+            <span className="text-mute">
+              {' '}· {unreviewed.reduce((n, b) => n + b.cards, 0).toLocaleString()} cards
+            </span>
+          </span>
+          <span className="text-xs text-arc">Review →</span>
+        </button>
       )}
 
       <div className="flex flex-wrap items-center gap-3">
