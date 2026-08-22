@@ -54,6 +54,13 @@ public sealed record CustomItemRequest(
     string? Notes = null,
     string? Language = null);
 
+/// <summary>One edit applied to every entry named, for acting on a whole selection.</summary>
+public sealed record BulkUpdateRequest(
+    IReadOnlyList<long> Ids,
+    UpdateEntryRequest Update);
+
+public sealed record BulkRemoveRequest(IReadOnlyList<long> Ids);
+
 /// <summary>A card you own, flattened with everything the grid needs to render it.</summary>
 public sealed record CollectionItem(
     long Id,

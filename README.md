@@ -53,6 +53,24 @@ Locations come through CSV import too — the column can be called `Location`,
 `Storage`, `Binder`, `Box`, `Where`, `Stored` or `Placement` — and are included
 in the CSV export.
 
+## Editing a lot of cards at once
+
+Hover a card and a **+** appears in its corner; click it to select. Shift-click
+another and everything between them on screen goes too, in the order you're
+looking at rather than the order they were added. **Select all shown** takes
+whatever the current filters have left.
+
+With a selection live, the count line becomes a toolbar: move them all to a
+location, set their language, or remove them. The selection is pruned whenever
+the filters change, so a card picked under one filter can't be quietly caught by
+a removal after you've narrowed to a different set — what you can see is what
+you can act on.
+
+There is deliberately **no bulk sell**. A lot sale is one price for the whole
+pile, and splitting it back across the cards means inventing a per-card figure
+that then feeds realised profit. Sell them individually, or record the lot as a
+single hand-entered sale.
+
 ## What language a card is
 
 Every entry records the language it was printed in, English unless you say
