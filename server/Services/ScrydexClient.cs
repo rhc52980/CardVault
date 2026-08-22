@@ -78,9 +78,46 @@ public sealed class ScrydexClient(
                   + "&include=prices";
 
         var root = await GetAsync(url, ct);
-        if (root is null) return [];
+        return root is null ? [] : MapResponse(root.Value, lang);
+    }
 
-        if (!root.Value.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Array)
+    /// <summary>
+    /// The untouched response for a small search, so the price mapping can be checked
+    /// against what Scrydex actually sends.
+    ///
+    /// Deliberately raw. Everything else here returns <see cref="ScrydexCard"/>, which
+    /// has already been through <see cref="ReadPrices"/> — and since what needs
+    /// checking is precisely which fields that function should be reading, handing
+    /// back its output would answer a question nobody asked. The field names inside a
+    /// price entry are not in Scrydex's published docs, so one real response is the
+    /// only way to learn them.
+    /// </summary>
+    public async Task<JsonElement?> ProbeAsync(string query, string language, CancellationToken ct)
+    {
+        if (!IsConfigured) return null;
+
+        // One card is enough to read the shape off, and credits are metered.
+        var url = $"{Base}/{Language(language)}/cards"
+                  + $"?q={Uri.EscapeDataString(query)}&page_size=1&include=prices";
+
+        return await GetAsync(url, ct);
+    }
+
+    /// <summary>
+    /// Every card in a response already in hand.
+    ///
+    /// Shared with the probe, which needs to show the raw response and the mapping of
+    /// that exact response side by side: credits are metered, and asking twice could
+    /// answer with different cards, which would break the comparison at precisely the
+    /// moment it matters.
+    /// </summary>
+    public static IReadOnlyList<ScrydexCard> MapResponse(JsonElement root, string language)
+    {
+        var lang = Language(language);
+
+        if (root.ValueKind != JsonValueKind.Object
+            || !root.TryGetProperty("data", out var data)
+            || data.ValueKind != JsonValueKind.Array)
             return [];
 
         return data.EnumerateArray().Select(c => Map(c, lang)).ToList();

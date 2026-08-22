@@ -682,13 +682,29 @@ app.MapDelete("/api/settings/scrydex", (SettingsService settings) =>
 /// A one-off look at exactly what Scrydex returns, so the price mapping can be
 /// checked against a real response rather than against the documentation, which
 /// does not publish the field names inside a price entry.
+///
+/// Both halves matter. "raw" is the untouched response and is the only place the
+/// price field names appear; "mapped" is what the client currently makes of it. A
+/// mapped price of null beside a raw response full of figures is the whole answer:
+/// the reader is looking for the wrong names.
 app.MapGet("/api/settings/scrydex/probe", async (
     ScrydexClient scrydex, CancellationToken ct, string q = "pikachu", string language = "ja") =>
 {
     if (!scrydex.IsConfigured) return Results.BadRequest(new { error = "No Scrydex credentials saved." });
 
-    var cards = await scrydex.SearchAsync(q, language, 3, ct);
-    return Results.Ok(new { count = cards.Count, cards });
+    var raw = await scrydex.ProbeAsync(q, language, ct);
+    if (raw is null)
+        return Results.BadRequest(new { error = "Scrydex did not answer. Check the credentials and the log." });
+
+    return Results.Ok(new
+    {
+        // Mapped from the response beside it, not fetched again: two calls could
+        // answer with different cards, which would break the comparison exactly when
+        // it's needed.
+        mapped = ScrydexClient.MapResponse(raw.Value, language),
+        // Named so it reads as the point of the endpoint rather than a debug leftover.
+        raw,
+    });
 });
 
 // ------------------------------------------------------------ offline catalogue
