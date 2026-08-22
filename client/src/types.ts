@@ -43,6 +43,10 @@ export interface CollectionItem {
   variant: string
   condition: string
   grade?: string | null
+  /** The grader read out of `grade`, when it names one. */
+  gradeCompany?: string | null
+  /** The number read out of `grade`, on the 1-10 scale. */
+  gradeValue?: number | null
   purchasePrice?: number | null
   purchaseDate?: string | null
   notes?: string | null
@@ -63,11 +67,15 @@ export interface CollectionItem {
   /** Printing language as an ISO code - "en", "ja", "zh-tw". */
   language: string
   /**
-   * False when our prices don't describe this copy, which today means any printing
-   * other than English. Such a card is worth its manual value or nothing, and the
-   * UI says so rather than showing a figure from the wrong market.
+   * False when our prices don't describe this copy — a slab, or a printing in a
+   * language none of our sources cover. Such a card is worth its manual value or
+   * nothing, and the UI says so rather than showing a figure from the wrong market.
    */
   priced: boolean
+  /** The market figure we hold but won't count. Present only when `priced` is false. */
+  referencePrice?: number | null
+  /** Why the figure doesn't count, when it doesn't. */
+  unpricedReason?: 'graded' | 'language' | null
 }
 
 export interface WantItem {
@@ -187,6 +195,8 @@ export interface SaleRecord {
   variant?: string | null
   condition?: string | null
   grade?: string | null
+  gradeCompany?: string | null
+  gradeValue?: number | null
   /** Null for sales recorded before language was tracked. */
   language?: string | null
   purchasePrice?: number | null

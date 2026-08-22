@@ -237,9 +237,10 @@ public sealed class CollectionService(Db db, SettingsService settings, IEnumerab
     /// counts on days only eBay saw it.
     ///
     /// Only copies the grid prices count, which is the same rule it applies: the
-    /// catalogue snapshots are English prices, so a Japanese single is left out, while
-    /// a hand-entered item keeps the eBay figure found under its own name. Counting a
-    /// copy here that the total below never shows would make the chart disagree with it.
+    /// catalogue snapshots are raw English prices, so a Japanese single and a slab are
+    /// both left out, while a hand-entered item keeps the eBay figure found under its
+    /// own name. Counting a copy here that the total below never shows would make the
+    /// chart disagree with it.
     /// </summary>
     public List<ValuePoint> ValueHistory()
     {
@@ -258,7 +259,9 @@ public sealed class CollectionService(Db db, SettingsService settings, IEnumerab
             ) p
             JOIN collection c ON c.card_id = p.card_id AND c.variant = p.variant
             JOIN cards k ON k.id = c.card_id
-            WHERE p.rn = 1 AND (c.language = $language OR k.is_custom = 1)
+            WHERE p.rn = 1
+              AND (k.is_custom = 1
+                   OR (c.language = $language AND (c.grade IS NULL OR TRIM(c.grade) = '')))
             GROUP BY p.captured_on
             ORDER BY p.captured_on
             """;
@@ -303,9 +306,27 @@ public sealed class CollectionService(Db db, SettingsService settings, IEnumerab
         // source that prices them searches eBay for the name you typed, so a listing
         // called "Japanese Base Set Charizard" is already priced as the Japanese
         // thing it is. That figure is about this copy, so it stands.
+        //
+        // A slab is out for the same reason. Every figure we hold is for a raw card,
+        // and a PSA 10 bears no relation to one — usually a large multiple, sometimes
+        // less than one for a common. There is no honest way to derive the second
+        // number from the first, so the raw price is kept as a reference to judge
+        // against and is not counted as what the slab is worth.
+        var grade = r.IsDBNull(5) ? null : r.GetString(5);
         var language = r.IsDBNull(29) ? Languages.Default : r.GetString(29);
-        var priced = isCustom || Languages.IsPriced(language);
+
+        var graded = !isCustom && Grades.IsGraded(grade);
+        var wrongLanguage = !isCustom && !Languages.IsPriced(language);
+        var priced = !graded && !wrongLanguage;
+
+        // Kept rather than discarded: knowing the raw card trades at $855 is exactly
+        // what you need to put a number on the slab, and the UI says which it is.
+        var referencePrice = priced ? null : marketPrice;
         if (!priced) marketPrice = null;
+
+        // Graded first when both apply. A Japanese PSA 10 is a slab before it is a
+        // Japanese card: the grade is the bigger reason the raw figure is wrong.
+        var unpricedReason = graded ? "graded" : wrongLanguage ? "language" : null;
 
         // Your own number still wins. A slabbed PSA 10 and a sealed booster box both
         // have a worth that a keyword search of live listings can only approximate.
@@ -330,7 +351,9 @@ public sealed class CollectionService(Db db, SettingsService settings, IEnumerab
             Quantity: quantity,
             Variant: variant,
             Condition: r.GetString(4),
-            Grade: r.IsDBNull(5) ? null : r.GetString(5),
+            Grade: grade,
+            GradeCompany: Grades.Company(grade),
+            GradeValue: Grades.Value(grade),
             PurchasePrice: r.IsDBNull(6) ? null : r.GetDouble(6),
             PurchaseDate: r.IsDBNull(7) ? null : r.GetString(7),
             Notes: r.IsDBNull(8) ? null : r.GetString(8),
@@ -345,6 +368,8 @@ public sealed class CollectionService(Db db, SettingsService settings, IEnumerab
             Location: r.IsDBNull(26) ? null : r.GetString(26),
             Language: language,
             Priced: priced,
+            ReferencePrice: referencePrice,
+            UnpricedReason: unpricedReason,
             ImportBatch: r.IsDBNull(28) ? null : r.GetString(28));
     }
 }
