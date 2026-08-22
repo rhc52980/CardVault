@@ -15,6 +15,7 @@ import type {
   FullCard,
   ImportBatchSummary,
   ImportJob,
+  PhotoStatus,
   SaleRecord,
   SearchCard,
   SellRequest,
@@ -126,6 +127,44 @@ export const api = {
   async remove(id: number) {
     const res = await fetch(`/api/collection/${id}`, { method: 'DELETE' })
     if (!res.ok) throw new Error(`Could not delete entry ${id}`)
+  },
+
+  photoStatus() {
+    return fetch('/api/photos').then(json<PhotoStatus>)
+  },
+
+  setPhotosEnabled(enabled: boolean) {
+    return fetch('/api/photos/enabled', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled }),
+    }).then(json<PhotoStatus>)
+  },
+
+  async deleteAllPhotos() {
+    const res = await fetch('/api/photos', { method: 'DELETE' })
+    if (!res.ok) throw new Error('Could not remove the photos')
+    return (await res.json()) as { removed: number; status: PhotoStatus }
+  },
+
+  /** The photo for one entry. Cache-busted so a replacement shows immediately. */
+  photoUrl(entryId: number, stamp?: number) {
+    return `/api/collection/${entryId}/photo${stamp ? `?v=${stamp}` : ''}`
+  },
+
+  async attachPhoto(entryId: number, file: File) {
+    const body = new FormData()
+    body.append('photo', file)
+    const res = await fetch(`/api/collection/${entryId}/photo`, { method: 'POST', body })
+    if (!res.ok) {
+      const detail = await res.json().catch(() => null)
+      throw new Error(detail?.error ?? 'Could not save that photo')
+    }
+  },
+
+  async detachPhoto(entryId: number) {
+    const res = await fetch(`/api/collection/${entryId}/photo`, { method: 'DELETE' })
+    if (!res.ok) throw new Error('Could not remove that photo')
   },
 
   /** One edit applied to a whole selection. Returns how many rows it touched. */

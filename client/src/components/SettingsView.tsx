@@ -4,6 +4,7 @@ import type {
   AppSettings,
   AuthStatus,
   CatalogueStatus,
+  PhotoStatus,
   PriceSourceSettings,
   SessionInfo,
 } from '../types'
@@ -66,6 +67,7 @@ export function SettingsView({
       <EbayCard settings={settings} onChanged={load} />
       <ScrydexCard settings={settings} onChanged={load} />
       <CatalogueCard />
+      <PhotosCard />
       <DataCard settings={settings} />
       <BackupsCard settings={settings} onChanged={load} />
     </div>
@@ -1244,6 +1246,94 @@ function BackupsCard({ settings, onChanged }: { settings: AppSettings; onChanged
         delete any <code className="font-mono">vault.db-wal</code> and{' '}
         <code className="font-mono">vault.db-shm</code> alongside it, then start the app again.
       </p>
+    </section>
+  )
+}
+
+// -------------------------------------------------------------- your own photos
+
+/**
+ * Photographs you take of your own cards, as distinct from catalogue artwork.
+ *
+ * Off until switched on, like the offline catalogue, because most people will never
+ * want it and an unused feature shouldn't leave a folder on disk. Switching it off
+ * and deleting the files are separate deliberately: one is reversible, the other
+ * emphatically is not, and a toggle that quietly binned your scans would be
+ * indefensible.
+ */
+function PhotosCard() {
+  const [status, setStatus] = useState<PhotoStatus | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  const load = () => api.photoStatus().then(setStatus).catch(() => {})
+
+  useEffect(() => {
+    void load()
+  }, [])
+
+  async function run(action: () => Promise<unknown>) {
+    setBusy(true)
+    try {
+      await action()
+      await load()
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (!status) return null
+
+  return (
+    <section className="panel rounded-xl p-4">
+      <h2 className="font-medium text-bright">Photos of your own cards</h2>
+      <p className="mt-1 text-sm text-mute">
+        Catalogue artwork shows what a card looks like in general. This is for what{' '}
+        <em>your</em> copy looks like — the corner wear, the centring, the slab label, which of
+        two copies is which. Attached per entry from the card panel, so two copies of the same
+        card can carry different photos.
+      </p>
+
+      <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg bg-white/[0.03] px-3 py-2 text-sm">
+        <span className={status.enabled ? 'text-mint' : 'text-mute'}>
+          {status.enabled ? '● On' : '○ Off'}
+        </span>
+        {status.count > 0 && (
+          <span className="text-xs text-mute">
+            · {status.count.toLocaleString()} {status.count === 1 ? 'photo' : 'photos'} ·{' '}
+            {bytes(status.bytes)}
+          </span>
+        )}
+      </div>
+
+      <p className="mt-2 text-xs text-gold/80">
+        Photos are not included in the automatic backup, which copies the database alone. Full
+        scans would turn a quick safety copy into a slow one — so keep your originals.
+      </p>
+
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <button
+          disabled={busy}
+          onClick={() => run(() => api.setPhotosEnabled(!status.enabled))}
+          className="rounded-lg bg-arc px-3 py-1.5 text-sm text-white transition hover:brightness-110 disabled:opacity-40"
+        >
+          {status.enabled ? 'Turn off' : 'Turn on'}
+        </button>
+
+        {status.count > 0 && (
+          <ConfirmButton
+            disabled={busy}
+            label={`Delete all ${status.count}`}
+            confirm={`Really delete all ${status.count}`}
+            onConfirm={() => run(api.deleteAllPhotos)}
+          />
+        )}
+      </div>
+
+      {status.enabled && status.count === 0 && (
+        <p className="mt-2 text-xs text-mute">
+          Open any card in your vault and use <span className="text-bright">Add a photo of this copy</span>.
+        </p>
+      )}
     </section>
   )
 }

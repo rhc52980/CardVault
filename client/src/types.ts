@@ -66,6 +66,8 @@ export interface CollectionItem {
   location?: string | null
   /** Printing language as an ISO code - "en", "ja", "zh-tw". */
   language: string
+  /** True when you've attached your own photograph of this copy. */
+  hasPhoto: boolean
   /**
    * False when our prices don't describe this copy — a slab, or a printing in a
    * language none of our sources cover. Such a card is worth its manual value or
@@ -101,6 +103,13 @@ export interface WantItem {
    * morning and one that has sat for a month are different situations.
    */
   metSince?: string | null
+}
+
+/** Whether your own card photos are switched on, and what they cost in disk. */
+export interface PhotoStatus {
+  enabled: boolean
+  count: number
+  bytes: number
 }
 
 export interface AddWantRequest {

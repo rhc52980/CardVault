@@ -260,6 +260,11 @@ public sealed class Db
         // entry, and the set completion built on it, are shared.
         AddColumn(conn, "collection", "language", "TEXT NOT NULL DEFAULT 'en'");
 
+        // The file name of your own photograph of this copy, if you've attached one.
+        // Per entry rather than per card on purpose: the whole point is telling two
+        // copies of the same card apart, which a shared image could never do.
+        AddColumn(conn, "collection", "photo", "TEXT");
+
         // When the market first came down to your target and stayed there, so the want
         // list can say how long a card has been at your price rather than only that it
         // is. A drop that happened this morning and one that has sat there a month are
