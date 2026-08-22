@@ -9,7 +9,7 @@
     <!-- Single source of truth for the app version. The backup service reads it
          to detect an update and snapshot the database before carrying on, so it
          has to be bumped on release for that protection to fire. -->
-    <Version>1.13.0</Version>
+    <Version>1.14.0</Version>
   </PropertyGroup>
 
   <!-- Stamped in at build time. The version alone can't tell two builds apart

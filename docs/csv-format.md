@@ -36,6 +36,7 @@ Header matching is case-insensitive and treats `_` and `-` as spaces, so `card_i
 | `Purchase Price` | `Paid`, `Cost`, `Buy Price` | `12.50` or `$12.50` | — |
 | `Purchase Date` | `Acquired`, `Date Added`, `Date` | `1999-01-09` | — |
 | `Grade` | `Graded`, `Cert` | A slab grade | — |
+| `Language` | `Lang`, `Locale` | `English`, `Japanese`, `ja`, `jp` | `English` |
 | `Location` | `Storage`, `Binder`, `Box`, `Where` | Free text | — |
 | `Notes` | `Note`, `Comment`, `Description` | Free text | — |
 
@@ -51,7 +52,16 @@ certification and is a different field.
   "first" becomes a 1st Edition printing; "holo" or "foil" becomes `holofoil`;
   everything else is `normal`. If a row asks for a printing the card was never issued
   in, the import falls back to a real one and says so on the row.
+- **Language** — names, ISO codes and the country codes people reach for all map
+  onto one code: `Japanese`, `japanese`, `JA` and `JP` are all `ja`. Anything
+  unrecognised becomes English, so a generator is best restricted to the codes.
 - **Purchase price** — currency symbols and thousands separators are stripped.
+
+### A non-English card is imported unpriced
+
+Every catalogue price is for the English printing, so a row that arrives as Japanese
+is stored with no market value rather than the English one. Give it a value of your
+own on the card and it counts towards your total normally.
 
 ## Write the number the way the card prints it
 

@@ -1,6 +1,12 @@
 import { useRef, useState } from 'react'
 import { api } from '../api'
-import { CONDITIONS, CONDITION_LABELS } from '../lib/cardStyles'
+import {
+  CONDITIONS,
+  CONDITION_LABELS,
+  DEFAULT_LANGUAGE,
+  LANGUAGES,
+  LANGUAGE_LABELS,
+} from '../lib/cardStyles'
 import { Modal } from './Modal'
 
 const field =
@@ -47,6 +53,7 @@ export function ManualEntryDialog({ onClose, onAdded }: { onClose: () => void; o
   const [name, setName] = useState('')
   const [quantity, setQuantity] = useState(1)
   const [condition, setCondition] = useState('NM')
+  const [language, setLanguage] = useState(DEFAULT_LANGUAGE)
   const [grade, setGrade] = useState('')
   const [value, setValue] = useState('')
   const [purchasePrice, setPurchasePrice] = useState('')
@@ -87,6 +94,7 @@ export function ManualEntryDialog({ onClose, onAdded }: { onClose: () => void; o
           purchasePrice: purchasePrice.trim() === '' ? null : Number(purchasePrice),
           purchaseDate: purchaseDate || null,
           notes: notes.trim() || null,
+          language,
         },
         file,
       )
@@ -186,6 +194,24 @@ export function ManualEntryDialog({ onClose, onAdded }: { onClose: () => void; o
               </select>
             </div>
           )}
+
+          <div>
+            <label className={label} htmlFor="clang">
+              Language
+            </label>
+            <select
+              id="clang"
+              className={field}
+              value={language}
+              onChange={(e) => setLanguage(e.target.value)}
+            >
+              {LANGUAGES.map((l) => (
+                <option key={l} value={l}>
+                  {LANGUAGE_LABELS[l]}
+                </option>
+              ))}
+            </select>
+          </div>
 
           {kind.showGrade && (
             <div>

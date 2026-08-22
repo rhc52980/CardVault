@@ -42,6 +42,7 @@ public sealed class ImportService(
         ["purchaseDate"] = ["purchase date", "purchasedate", "date acquired", "acquired", "date added", "date"],
         ["notes"] = ["notes", "note", "comment", "comments", "description"],
         ["location"] = ["location", "storage", "binder", "box", "where", "stored", "placement"],
+        ["language"] = ["language", "lang", "printing language", "locale"],
     };
 
     public ImportJob? Get(string id) => _jobs.GetValueOrDefault(id);
@@ -157,6 +158,7 @@ public sealed class ImportService(
             Quantity = ParseQuantity(Get("quantity")),
             Condition = NormalizeCondition(Get("condition")),
             Grade = Get("grade"),
+            Language = Languages.Normalize(Get("language")),
             PurchasePrice = ParseMoney(Get("purchasePrice")),
             PurchaseDate = ParseDate(Get("purchaseDate")),
             Notes = Get("notes"),
@@ -640,7 +642,8 @@ public sealed class ImportService(
                 PurchasePrice: row.PurchasePrice,
                 PurchaseDate: row.PurchaseDate,
                 Notes: row.Notes,
-                Location: row.Location),
+                Location: row.Location,
+                Language: row.Language),
                 importBatch: jobId);
 
             // Same as a single add: give each imported card a starting price point.

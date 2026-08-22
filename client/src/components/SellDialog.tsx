@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { api, cardImage, money } from '../api'
-import { prettyVariant } from '../lib/cardStyles'
+import { DEFAULT_LANGUAGE, languageName, prettyVariant } from '../lib/cardStyles'
 import type { CollectionItem } from '../types'
 import { Modal } from './Modal'
 
@@ -76,7 +76,9 @@ export function SellDialog({
             </p>
             <p className="mt-0.5 text-xs text-mute">
               {prettyVariant(entry.variant)} · {entry.condition}
-              {entry.grade ? ` · ${entry.grade}` : ''} · you have {entry.quantity}
+              {entry.grade ? ` · ${entry.grade}` : ''}
+              {entry.language !== DEFAULT_LANGUAGE ? ` · ${languageName(entry.language)}` : ''} · you
+              have {entry.quantity}
             </p>
           </div>
         </div>

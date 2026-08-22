@@ -251,6 +251,20 @@ public sealed class Db
         // since touched, instead of discarding your corrections without mentioning it.
         AddColumn(conn, "collection", "modified_at", "TEXT");
 
+        // What language the copy you own was printed in. Defaulting existing rows to
+        // English is not a guess: the catalogue every one of them was resolved
+        // against is English-only, so that is the printing they were entered as.
+        //
+        // It lives on the collection rather than on cards because a Japanese card is
+        // the same card in another language, not a different card - the catalogue
+        // entry, and the set completion built on it, are shared.
+        AddColumn(conn, "collection", "language", "TEXT NOT NULL DEFAULT 'en'");
+
+        // Copied onto the sale for the same reason as condition and grade: the ledger
+        // has to keep saying what was sold once the collection row is gone. Nullable
+        // because sales recorded before this column existed genuinely don't know.
+        AddColumn(conn, "sales", "language", "TEXT");
+
         // Created here rather than alongside the table: on an existing database the
         // column above doesn't exist until the line above runs.
         using (var index = conn.CreateCommand())
