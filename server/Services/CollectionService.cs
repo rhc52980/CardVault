@@ -91,6 +91,28 @@ public sealed class CollectionService(Db db, SettingsService settings, IEnumerab
 
     public bool Update(long id, UpdateEntryRequest req)
     {
+        var (sets, pars) = BuildUpdate(req);
+        if (sets.Count == 0) return true;
+
+        using var conn = db.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = $"UPDATE collection SET {string.Join(", ", sets)} WHERE id = $id";
+        foreach (var (k, v) in pars) cmd.Parameters.AddWithValue(k, v);
+        cmd.Parameters.AddWithValue("$id", id);
+        return cmd.ExecuteNonQuery() > 0;
+    }
+
+    /// <summary>
+    /// The SET clause for an edit, shared by the single and bulk paths so the two can
+    /// never drift — a rule about clearing a value, or normalising a language, that
+    /// held for one card but not for fifty would be a nasty thing to discover.
+    ///
+    /// Returns no clauses at all when the request asks for nothing, which the callers
+    /// treat as success rather than building an UPDATE with an empty SET.
+    /// </summary>
+    private static (List<string> Sets, Dictionary<string, object> Parameters) BuildUpdate(
+        UpdateEntryRequest req)
+    {
         // Only touch the fields the caller actually sent, so a partial edit from the
         // detail panel doesn't wipe out purchase info it never displayed.
         var sets = new List<string>();
@@ -135,7 +157,7 @@ public sealed class CollectionService(Db db, SettingsService settings, IEnumerab
         if (req.ClearPurchasePrice) sets.Add("purchase_price = NULL");
         else Set("purchase_price", "purchasePrice", req.PurchasePrice);
 
-        if (sets.Count == 0) return true;
+        if (sets.Count == 0) return (sets, pars);
 
         // Records that this entry is no longer as it was imported. A partial sale ends
         // up here too, which is the point: removing an import batch can then tell you
@@ -144,12 +166,7 @@ public sealed class CollectionService(Db db, SettingsService settings, IEnumerab
         sets.Add("modified_at = $modifiedAt");
         pars["$modifiedAt"] = DateTime.UtcNow.ToString("o");
 
-        using var conn = db.Open();
-        using var cmd = conn.CreateCommand();
-        cmd.CommandText = $"UPDATE collection SET {string.Join(", ", sets)} WHERE id = $id";
-        foreach (var (k, v) in pars) cmd.Parameters.AddWithValue(k, v);
-        cmd.Parameters.AddWithValue("$id", id);
-        return cmd.ExecuteNonQuery() > 0;
+        return (sets, pars);
     }
 
     public bool Delete(long id)
@@ -160,6 +177,76 @@ public sealed class CollectionService(Db db, SettingsService settings, IEnumerab
         cmd.Parameters.AddWithValue("$id", id);
         return cmd.ExecuteNonQuery() > 0;
     }
+
+    /// <summary>
+    /// Applies one edit to many entries, for the things worth doing to a whole shelf
+    /// at once — where they live, what language they are, what condition they're in.
+    ///
+    /// One statement per chunk rather than a loop of single updates: the set clause is
+    /// identical for every row, so building it once and matching on a list of ids is
+    /// both faster and atomic per chunk. Chunked because SQLite caps how many
+    /// parameters one statement may carry, and a selection can be the whole vault.
+    /// </summary>
+    public int UpdateMany(IReadOnlyList<long> ids, UpdateEntryRequest req)
+    {
+        if (ids.Count == 0) return 0;
+
+        var (sets, pars) = BuildUpdate(req);
+        if (sets.Count == 0) return 0;
+
+        using var conn = db.Open();
+        using var tx = conn.BeginTransaction();
+        var changed = 0;
+
+        foreach (var chunk in ids.Distinct().Chunk(ChunkSize))
+        {
+            using var cmd = conn.CreateCommand();
+            cmd.Transaction = tx;
+
+            var names = chunk.Select((_, i) => $"$id{i}").ToArray();
+            cmd.CommandText =
+                $"UPDATE collection SET {string.Join(", ", sets)} WHERE id IN ({string.Join(", ", names)})";
+
+            foreach (var (k, v) in pars) cmd.Parameters.AddWithValue(k, v);
+            for (var i = 0; i < chunk.Length; i++) cmd.Parameters.AddWithValue(names[i], chunk[i]);
+
+            changed += cmd.ExecuteNonQuery();
+        }
+
+        tx.Commit();
+        return changed;
+    }
+
+    /// <summary>Removes many entries. Same chunking, same reasons.</summary>
+    public int DeleteMany(IReadOnlyList<long> ids)
+    {
+        if (ids.Count == 0) return 0;
+
+        using var conn = db.Open();
+        using var tx = conn.BeginTransaction();
+        var removed = 0;
+
+        foreach (var chunk in ids.Distinct().Chunk(ChunkSize))
+        {
+            using var cmd = conn.CreateCommand();
+            cmd.Transaction = tx;
+
+            var names = chunk.Select((_, i) => $"$id{i}").ToArray();
+            cmd.CommandText = $"DELETE FROM collection WHERE id IN ({string.Join(", ", names)})";
+            for (var i = 0; i < chunk.Length; i++) cmd.Parameters.AddWithValue(names[i], chunk[i]);
+
+            removed += cmd.ExecuteNonQuery();
+        }
+
+        tx.Commit();
+        return removed;
+    }
+
+    /// <summary>
+    /// Well inside SQLite's parameter ceiling, which is the real constraint here — a
+    /// selection of two thousand cards is an ordinary thing to do to a vault this size.
+    /// </summary>
+    private const int ChunkSize = 400;
 
     public CollectionStats Stats()
     {

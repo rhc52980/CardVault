@@ -28,6 +28,13 @@ interface Props {
    */
   highlight?: boolean
   onClick?: () => void
+  /**
+   * Selection, for grids that support acting on several cards at once. The checkbox
+   * only appears when a handler is given, so grids that don't do this are unchanged.
+   */
+  selected?: boolean
+  /** Passed the shift key, so the grid can extend a range rather than toggle one. */
+  onToggleSelect?: (extend: boolean) => void
 }
 
 /**
@@ -46,6 +53,8 @@ export function CardTile({
   footer,
   highlight,
   onClick,
+  selected,
+  onToggleSelect,
 }: Props) {
   const ref = useRef<HTMLDivElement>(null)
   const [loaded, setLoaded] = useState(false)
@@ -91,7 +100,11 @@ export function CardTile({
           }
         }}
         className={`card-tile card-holo relative aspect-[245/342] cursor-pointer overflow-hidden rounded-xl bg-abyss focus:ring-2 focus:ring-arc focus:outline-none ${
-          highlight ? 'shadow-lg shadow-arc/25 ring-2 ring-arc/70' : 'ring-1 ring-white/5'
+          selected
+            ? 'shadow-lg shadow-mint/25 ring-2 ring-mint'
+            : highlight
+              ? 'shadow-lg shadow-arc/25 ring-2 ring-arc/70'
+              : 'ring-1 ring-white/5'
         }`}
       >
         {!loaded && !showPlaceholder && <div className="skeleton absolute inset-0 rounded-xl" />}
@@ -118,6 +131,27 @@ export function CardTile({
         )}
 
         {badge && <div className="absolute top-2 left-2 z-10">{badge}</div>}
+
+        {onToggleSelect && (
+          // Stops the click reaching the tile: picking a card for a bulk edit and
+          // opening its detail panel are different intentions.
+          <button
+            type="button"
+            aria-label={selected ? `Deselect ${name}` : `Select ${name}`}
+            aria-pressed={selected}
+            onClick={(e) => {
+              e.stopPropagation()
+              onToggleSelect(e.shiftKey)
+            }}
+            className={`absolute top-2 right-2 z-20 flex h-6 w-6 items-center justify-center rounded-md text-xs font-bold shadow transition ${
+              selected
+                ? 'bg-mint text-black'
+                : 'bg-black/60 text-white/70 opacity-0 backdrop-blur group-hover:opacity-100 focus:opacity-100'
+            }`}
+          >
+            {selected ? '✓' : '+'}
+          </button>
+        )}
 
         {footer && (
           <div className="absolute inset-x-0 bottom-0 z-10 translate-y-full bg-gradient-to-t from-black/95 via-black/80 to-transparent p-2 transition-transform duration-200 group-hover:translate-y-0">

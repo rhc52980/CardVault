@@ -383,6 +383,29 @@ app.MapDelete("/api/collection/{id:long}", (long id, CollectionService collectio
     return Results.NoContent();
 });
 
+/// The same edit applied to a whole selection. One request rather than one per card:
+/// setting the location on a shelf of two hundred is an ordinary thing to want, and
+/// two hundred round trips would be slower and could half-finish.
+app.MapPatch("/api/collection/bulk", (BulkUpdateRequest req, CollectionService collection) =>
+{
+    if (req.Ids.Count == 0) return Results.BadRequest(new { error = "No cards were selected." });
+
+    var changed = collection.UpdateMany(req.Ids, req.Update);
+    return Results.Ok(new { changed });
+});
+
+/// Removing a selection. A POST rather than a DELETE because it carries a body, and
+/// enough clients and proxies quietly drop a body on DELETE to make that a bad bet.
+app.MapPost("/api/collection/bulk/remove", (
+    BulkRemoveRequest req, CollectionService collection, CustomItemService custom) =>
+{
+    if (req.Ids.Count == 0) return Results.BadRequest(new { error = "No cards were selected." });
+
+    var removed = collection.DeleteMany(req.Ids);
+    custom.CleanUpOrphans();
+    return Results.Ok(new { removed });
+});
+
 // ------------------------------------------------------------ authentication
 
 app.MapGet("/api/auth/status", (HttpContext ctx, AuthService auth) => Results.Ok(new
