@@ -1,6 +1,14 @@
 import { useEffect, useState } from 'react'
 import { api, cardImage, money } from '../api'
-import { prettyVariant, rarityClass, typeClass } from '../lib/cardStyles'
+import {
+  DEFAULT_LANGUAGE,
+  LANGUAGES,
+  LANGUAGE_LABELS,
+  languageName,
+  prettyVariant,
+  rarityClass,
+  typeClass,
+} from '../lib/cardStyles'
 import type { CollectionItem, FullCard } from '../types'
 import { ConfirmButton } from './ConfirmButton'
 import { Modal } from './Modal'
@@ -228,6 +236,16 @@ function OwnedRow({ entry, onChanged }: { entry: CollectionItem; onChanged: () =
     }
   }
 
+  async function saveLanguage(next: string) {
+    setBusy(true)
+    try {
+      await api.update(entry.id, { language: next })
+      onChanged()
+    } finally {
+      setBusy(false)
+    }
+  }
+
   async function saveValue() {
     setBusy(true)
     try {
@@ -298,6 +316,7 @@ function OwnedRow({ entry, onChanged }: { entry: CollectionItem; onChanged: () =
         <div className="truncate">
           {prettyVariant(entry.variant)} · {entry.condition}
           {entry.grade ? ` · ${entry.grade}` : ''}
+          {entry.language !== DEFAULT_LANGUAGE ? ` · ${languageName(entry.language)}` : ''}
         </div>
         <div className="mt-0.5 text-xs text-mute">
           {money(effectiveValue)} each
@@ -314,6 +333,14 @@ function OwnedRow({ entry, onChanged }: { entry: CollectionItem; onChanged: () =
 
         {entry.manualValue != null && entry.marketPrice != null && (
           <div className="mt-0.5 text-xs text-mute">Ungraded market price is {money(entry.marketPrice)}</div>
+        )}
+
+        {!entry.priced && (
+          <div className="mt-0.5 text-xs text-amber-300/80">
+            No market price: our prices come from a catalogue of the English printings, and
+            this is the {languageName(entry.language)} one.
+            {entry.manualValue == null && ' Set your own value to have it count towards your total.'}
+          </div>
         )}
 
         {editingValue ? (
@@ -438,6 +465,22 @@ function OwnedRow({ entry, onChanged }: { entry: CollectionItem; onChanged: () =
             {entry.location ? `📍 ${entry.location}` : '📍 Where is it?'}
           </button>
         )}
+
+        <label className="mt-1 flex items-center gap-1.5 text-xs text-mute">
+          Language
+          <select
+            value={entry.language}
+            disabled={busy}
+            onChange={(e) => void saveLanguage(e.target.value)}
+            className="rounded-md border border-edge bg-abyss px-1.5 py-0.5 text-xs text-bright outline-none focus:border-arc disabled:opacity-40"
+          >
+            {LANGUAGES.map((l) => (
+              <option key={l} value={l}>
+                {LANGUAGE_LABELS[l]}
+              </option>
+            ))}
+          </select>
+        </label>
 
         {entry.notes && <div className="mt-0.5 truncate text-xs text-mute italic">{entry.notes}</div>}
       </div>

@@ -46,3 +46,57 @@ export const CONDITION_LABELS: Record<string, string> = {
   HP: 'Heavily Played',
   DMG: 'Damaged',
 }
+
+/**
+ * Printing languages, kept in step with Languages.cs on the server. English first
+ * because it is the default, Japanese next because it is the one people actually
+ * collect alongside it.
+ */
+export const LANGUAGES = [
+  'en',
+  'ja',
+  'fr',
+  'de',
+  'it',
+  'es',
+  'pt',
+  'ko',
+  'zh-tw',
+  'zh-cn',
+  'id',
+  'th',
+  'ru',
+] as const
+
+export const LANGUAGE_LABELS: Record<string, string> = {
+  en: 'English',
+  ja: 'Japanese',
+  fr: 'French',
+  de: 'German',
+  it: 'Italian',
+  es: 'Spanish',
+  pt: 'Portuguese',
+  ko: 'Korean',
+  'zh-tw': 'Chinese (Traditional)',
+  'zh-cn': 'Chinese (Simplified)',
+  id: 'Indonesian',
+  th: 'Thai',
+  ru: 'Russian',
+}
+
+export const DEFAULT_LANGUAGE = 'en'
+
+/** "ja" -> "Japanese", and anything unknown back as it came. */
+export function languageName(code?: string | null) {
+  if (!code) return ''
+  return LANGUAGE_LABELS[code] ?? code
+}
+
+/**
+ * A short tag for the grid. English is left unlabelled on purpose: nearly every card
+ * is English, so badging them all would be noise that hides the handful that differ.
+ */
+export function languageTag(code?: string | null) {
+  if (!code || code === DEFAULT_LANGUAGE) return null
+  return code.toUpperCase()
+}

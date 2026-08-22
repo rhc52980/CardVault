@@ -870,11 +870,12 @@ app.MapGet("/api/import/template", () =>
     // the Set column can be left empty and a spreadsheet becomes one column of
     // numbers typed off the cards.
     const string csv =
-        "Name,Set,Number,Quantity,Variant,Condition,Purchase Price,Purchase Date,Notes\n" +
-        "Charizard,Base,4,1,Holofoil,NM,250.00,1999-01-09,Childhood card\n" +
-        "Pikachu,Base,58,3,Normal,LP,4.00,,\n" +
-        ",,045/094,1,,NM,,,Number as printed - the set is worked out from it\n" +
-        ",,45094,1,,NM,,,The same thing with nothing typed but digits\n";
+        "Name,Set,Number,Quantity,Variant,Condition,Language,Purchase Price,Purchase Date,Notes\n" +
+        "Charizard,Base,4,1,Holofoil,NM,English,250.00,1999-01-09,Childhood card\n" +
+        "Pikachu,Base,58,3,Normal,LP,,4.00,,\n" +
+        "Mew,,151,1,Normal,NM,Japanese,,,Left blank above means English\n" +
+        ",,045/094,1,,NM,,,,Number as printed - the set is worked out from it\n" +
+        ",,45094,1,,NM,,,,The same thing with nothing typed but digits\n";
     return Results.File(System.Text.Encoding.UTF8.GetBytes(csv), "text/csv", "card-vault-template.csv");
 });
 

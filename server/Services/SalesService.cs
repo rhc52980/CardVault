@@ -39,11 +39,11 @@ public sealed class SalesService(Db db, CollectionService collection)
         {
             cmd.CommandText = """
                 INSERT INTO sales (card_id, card_name, set_name, number, image_small, quantity,
-                                   variant, condition, grade, purchase_price, sale_price, fees,
-                                   sale_date, notes, recorded_at)
+                                   variant, condition, grade, language, purchase_price, sale_price,
+                                   fees, sale_date, notes, recorded_at)
                 VALUES ($cardId, $cardName, $setName, $number, $imageSmall, $quantity,
-                        $variant, $condition, $grade, $purchasePrice, $salePrice, $fees,
-                        $saleDate, $notes, $recordedAt);
+                        $variant, $condition, $grade, $language, $purchasePrice, $salePrice,
+                        $fees, $saleDate, $notes, $recordedAt);
                 SELECT last_insert_rowid();
                 """;
             cmd.Parameters.AddWithValue("$cardId", entry.CardId);
@@ -55,6 +55,7 @@ public sealed class SalesService(Db db, CollectionService collection)
             cmd.Parameters.AddWithValue("$variant", entry.Variant);
             cmd.Parameters.AddWithValue("$condition", entry.Condition);
             cmd.Parameters.AddWithValue("$grade", (object?)entry.Grade ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("$language", entry.Language);
             cmd.Parameters.AddWithValue("$purchasePrice", (object?)entry.PurchasePrice ?? DBNull.Value);
             cmd.Parameters.AddWithValue("$salePrice", req.SalePrice);
             cmd.Parameters.AddWithValue("$fees", (object?)req.Fees ?? DBNull.Value);
@@ -77,7 +78,8 @@ public sealed class SalesService(Db db, CollectionService collection)
         using var cmd = conn.CreateCommand();
         cmd.CommandText = """
             SELECT id, card_id, card_name, set_name, number, image_small, quantity, variant,
-                   condition, grade, purchase_price, sale_price, fees, sale_date, notes, recorded_at
+                   condition, grade, purchase_price, sale_price, fees, sale_date, notes,
+                   recorded_at, language
             FROM sales
             ORDER BY sale_date DESC, id DESC
             """;
@@ -129,6 +131,10 @@ public sealed class SalesService(Db db, CollectionService collection)
             Variant: r.IsDBNull(7) ? null : r.GetString(7),
             Condition: r.IsDBNull(8) ? null : r.GetString(8),
             Grade: r.IsDBNull(9) ? null : r.GetString(9),
+            // Null for sales recorded before the column existed. Left as null rather
+            // than defaulted to English: the ledger is a record of what was true, and
+            // it genuinely wasn't asked at the time.
+            Language: r.IsDBNull(16) ? null : r.GetString(16),
             PurchasePrice: purchasePrice,
             SalePrice: salePrice,
             Fees: fees,

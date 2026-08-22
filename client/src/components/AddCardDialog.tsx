@@ -1,6 +1,13 @@
 import { useState } from 'react'
 import { api, cardImage, money } from '../api'
-import { CONDITIONS, CONDITION_LABELS, prettyVariant } from '../lib/cardStyles'
+import {
+  CONDITIONS,
+  CONDITION_LABELS,
+  DEFAULT_LANGUAGE,
+  LANGUAGES,
+  LANGUAGE_LABELS,
+  prettyVariant,
+} from '../lib/cardStyles'
 import type { SearchCard } from '../types'
 import { Modal } from './Modal'
 
@@ -21,6 +28,7 @@ export function AddCardDialog({
   const [variant, setVariant] = useState(variants[0])
   const [quantity, setQuantity] = useState(1)
   const [condition, setCondition] = useState<string>('NM')
+  const [language, setLanguage] = useState<string>(DEFAULT_LANGUAGE)
   const [grade, setGrade] = useState('')
   const [purchasePrice, setPurchasePrice] = useState('')
   const [purchaseDate, setPurchaseDate] = useState('')
@@ -44,6 +52,7 @@ export function AddCardDialog({
         purchaseDate: purchaseDate || null,
         notes: notes.trim() || null,
         location: location.trim() || null,
+        language,
       })
       onAdded()
       onClose()
@@ -114,6 +123,30 @@ export function AddCardDialog({
                 </option>
               ))}
             </select>
+          </div>
+
+          <div>
+            <label className={label} htmlFor="language">
+              Language
+            </label>
+            <select
+              id="language"
+              className={field}
+              value={language}
+              onChange={(e) => setLanguage(e.target.value)}
+            >
+              {LANGUAGES.map((l) => (
+                <option key={l} value={l}>
+                  {LANGUAGE_LABELS[l]}
+                </option>
+              ))}
+            </select>
+            {language !== DEFAULT_LANGUAGE && (
+              <p className="mt-1 text-[11px] leading-snug text-mute">
+                Prices here are for the English printing, so this copy will show no market
+                value. Set your own on the card once it's added.
+              </p>
+            )}
           </div>
 
           <div>

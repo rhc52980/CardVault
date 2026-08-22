@@ -60,6 +60,14 @@ export interface CollectionItem {
   isCustom: boolean
   /** Where the card physically lives. */
   location?: string | null
+  /** Printing language as an ISO code - "en", "ja", "zh-tw". */
+  language: string
+  /**
+   * False when our prices don't describe this copy, which today means any printing
+   * other than English. Such a card is worth its manual value or nothing, and the
+   * UI says so rather than showing a figure from the wrong market.
+   */
+  priced: boolean
 }
 
 export interface WantItem {
@@ -179,6 +187,8 @@ export interface SaleRecord {
   variant?: string | null
   condition?: string | null
   grade?: string | null
+  /** Null for sales recorded before language was tracked. */
+  language?: string | null
   purchasePrice?: number | null
   salePrice: number
   fees?: number | null
@@ -201,6 +211,7 @@ export interface AddEntryRequest {
   notes?: string | null
   manualValue?: number | null
   location?: string | null
+  language?: string | null
 }
 
 export interface UpdateEntryRequest extends Partial<Omit<AddEntryRequest, 'cardId'>> {
@@ -221,6 +232,7 @@ export interface CustomItemRequest {
   purchasePrice?: number | null
   purchaseDate?: string | null
   notes?: string | null
+  language?: string | null
 }
 
 export interface AuthStatus {
@@ -382,6 +394,7 @@ export interface ImportRow {
   variant: string
   condition: string
   grade?: string | null
+  language: string
   purchasePrice?: number | null
   purchaseDate?: string | null
   notes?: string | null

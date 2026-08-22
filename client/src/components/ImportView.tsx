@@ -1,6 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { api, cardImage, money } from '../api'
-import { CONDITIONS, CONDITION_LABELS, prettyVariant } from '../lib/cardStyles'
+import {
+  CONDITIONS,
+  CONDITION_LABELS,
+  LANGUAGES,
+  LANGUAGE_LABELS,
+  prettyVariant,
+} from '../lib/cardStyles'
 import { Modal } from './Modal'
 import type {
   AddEntryRequest,
@@ -56,6 +62,7 @@ interface RowEdit {
   quantity: number
   variant: string
   condition: string
+  language: string
   variants: string[]
 }
 
@@ -118,6 +125,7 @@ export function ImportView({ onImported }: { onImported: () => void }) {
           quantity: row.quantity,
           variant: row.variant,
           condition: row.condition,
+          language: row.language,
           variants: row.variants ?? [],
         }
       }
@@ -181,6 +189,7 @@ export function ImportView({ onImported }: { onImported: () => void }) {
           quantity: edit.quantity,
           variant: edit.variant,
           condition: edit.condition,
+          language: edit.language,
           grade: row.grade ?? null,
           purchasePrice: row.purchasePrice ?? null,
           purchaseDate: row.purchaseDate ?? null,
@@ -242,7 +251,7 @@ export function ImportView({ onImported }: { onImported: () => void }) {
       return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text
     }
 
-    const lines = ['Name,Set,Number,Quantity,Condition,Notes']
+    const lines = ['Name,Set,Number,Quantity,Condition,Language,Notes']
     for (const row of job.rows) {
       if (results[row.index]?.added) continue
 
@@ -257,6 +266,7 @@ export function ImportView({ onImported }: { onImported: () => void }) {
           cell(printed),
           cell(row.quantity),
           cell(row.condition),
+          cell(row.language),
           cell(results[row.index]?.reason ?? row.message),
         ].join(','),
       )
@@ -530,6 +540,9 @@ export function ImportView({ onImported }: { onImported: () => void }) {
             <span className="text-bright">Condition</span> — NM, Lightly Played, Excellent…
           </li>
           <li>
+            <span className="text-bright">Language</span> — lang, locale. Left out means English.
+          </li>
+          <li>
             <span className="text-bright">Purchase Price</span> — paid, cost, buy price
           </li>
           <li>
@@ -721,6 +734,18 @@ function ImportRowCard({
                 {CONDITIONS.map((c) => (
                   <option key={c} value={c}>
                     {CONDITION_LABELS[c]}
+                  </option>
+                ))}
+              </select>
+
+              <select
+                value={edit.language}
+                onChange={(e) => onChange({ language: e.target.value })}
+                className={control}
+              >
+                {LANGUAGES.map((l) => (
+                  <option key={l} value={l}>
+                    {LANGUAGE_LABELS[l]}
                   </option>
                 ))}
               </select>

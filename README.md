@@ -53,6 +53,30 @@ Locations come through CSV import too — the column can be called `Location`,
 `Storage`, `Binder`, `Box`, `Where`, `Stored` or `Placement` — and are included
 in the CSV export.
 
+## What language a card is
+
+Every entry records the language it was printed in, English unless you say
+otherwise. Set it when adding a card or from the dropdown on any entry, and the
+same card can sit in your vault in two languages without being treated as a
+duplicate — they share a catalogue entry but they are different cards to own.
+Anything that isn't English is tagged on the card tile, and a language dropdown
+appears in the vault toolbar once you own something that isn't.
+
+**A non-English card has no market price.** TCGplayer and Cardmarket figures both
+arrive through the catalogue, which is English-only, and a Japanese card trades in a
+different market at a different price. Rather than show you a number from the wrong
+market, such a card is left unpriced and stays out of your collection total until
+you give it a value of your own, the same way a graded slab or a sealed box does.
+
+Hand-entered items are the exception. They're priced by searching eBay for the name
+you gave them, so an item called "Japanese Base Set Charizard" is already being
+priced as the Japanese thing it is, and that figure stands whatever language you
+set on it.
+
+Set completion still counts a card you own in any language. The catalogue entry is
+shared between printings, and a set you filled with Japanese cards is a set you
+filled.
+
 ## Want list
 
 Cards you're hunting live under **My vault → Wanted**. Add them from the
@@ -220,6 +244,7 @@ optional:
 | Quantity | qty, count, copies |
 | Variant | printing, finish, foil |
 | Condition | cond |
+| Language | lang, locale — defaults to English |
 | Purchase Price | paid, cost, buy price |
 | Purchase Date | acquired, date added |
 | Card ID | a pokemontcg.io id such as `base1-4` |

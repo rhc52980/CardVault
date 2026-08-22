@@ -56,7 +56,8 @@ public sealed class CustomItemService(
             PurchasePrice: req.PurchasePrice,
             PurchaseDate: req.PurchaseDate,
             Notes: req.Notes,
-            ManualValue: req.Value));
+            ManualValue: req.Value,
+            Language: req.Language));
 
         return (cardId, entryId);
     }

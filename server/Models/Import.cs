@@ -93,6 +93,12 @@ public sealed class ImportRow
     public string? Notes { get; set; }
     public string? Location { get; set; }
 
+    /// <summary>
+    /// Printing language as a code, normalised at parse time so the review list shows
+    /// what will actually be stored rather than whatever the CSV happened to say.
+    /// </summary>
+    public string Language { get; set; } = Services.Languages.Default;
+
     public List<CardCandidate> Candidates { get; set; } = [];
 }
 
@@ -120,6 +126,7 @@ public sealed record CommitRow(
     string? PurchaseDate = null,
     string? Notes = null,
     string? Location = null,
+    string? Language = null,
     /// <summary>
     /// The row this came from, echoed back in <see cref="CommitOutcome"/> so the
     /// review list can mark up individual rows rather than only a total. Defaults to
