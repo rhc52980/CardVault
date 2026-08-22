@@ -105,6 +105,15 @@ ringed in green, and counted in a banner. Wanted cards are included in the daily
 price refresh for exactly this reason — a target is only useful against a
 current price.
 
+**The count follows you.** The Wanted tab carries the number of cards currently
+at your price, so a drop is visible from the vault rather than only once you go
+looking. Each hit also says how long it has been there — "today", "for 6 days" —
+because a drop this morning and one that has sat for a fortnight are different
+situations: the first is news, the second is a price you've already decided not
+to pay. That clock is worked out after each daily price capture, so it means
+when the price actually crossed, not when you next opened the app. It resets if
+the price goes back above your target, so it always describes the current run.
+
 When you find one, **Got it** moves it straight into your collection, carrying
 the printing across and capturing what you actually paid, then takes it off the
 list. Search results badge cards already on the list so you don't add them twice.

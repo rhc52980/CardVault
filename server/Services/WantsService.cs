@@ -2,6 +2,7 @@ using System.Text.Json;
 using Microsoft.Data.Sqlite;
 using CardVault.Data;
 using CardVault.Models;
+using CardVault.Services.PriceSources;
 
 namespace CardVault.Services;
 
@@ -12,19 +13,20 @@ namespace CardVault.Services;
 /// the specific cards you're actually chasing. Because the app records prices daily
 /// anyway, it can tell you when one of them comes down to your number.
 /// </summary>
-public sealed class WantsService(Db db, CollectionService collection)
+public sealed class WantsService(
+    Db db, CollectionService collection, SettingsService settings, IEnumerable<IPriceSource> sources)
 {
     public List<WantItem> List()
     {
+        // Bring the alert state up to date before reading it. The daily capture does
+        // this too, which is what makes the dates mean "when the price crossed" rather
+        // than "when you last happened to open the app".
+        RefreshAlerts();
+
         using var conn = db.Open();
         using var cmd = conn.CreateCommand();
-        cmd.CommandText = """
-            SELECT w.id, w.card_id, w.variant, w.target_price, w.quantity, w.notes, w.added_at,
-                   k.name, k.set_name, k.number, k.rarity, k.image_small, k.payload
-            FROM wants w
-            JOIN cards k ON k.id = w.card_id
-            ORDER BY w.added_at DESC
-            """;
+        cmd.CommandText = SelectWants + " ORDER BY w.added_at DESC";
+        cmd.Parameters.AddWithValue("$currency", PreferredCurrency());
 
         var items = new List<WantItem>();
         using var r = cmd.ExecuteReader();
@@ -35,6 +37,73 @@ public sealed class WantsService(Db db, CollectionService collection)
             .OrderByDescending(i => i.AtOrBelowTarget)
             .ThenBy(i => i.DifferenceToTarget ?? double.MaxValue)
             .ToList();
+    }
+
+    /// <summary>
+    /// The last recorded price is pulled alongside each row exactly as the collection
+    /// grid does it, so a want and the same card once owned never quote different
+    /// numbers. Without the fallback a card the catalogue can't price — anything only
+    /// eBay has seen — would sit on the list with no figure and never trip its target.
+    /// </summary>
+    private const string SelectWants = """
+        SELECT w.id, w.card_id, w.variant, w.target_price, w.quantity, w.notes, w.added_at,
+               k.name, k.set_name, k.number, k.rarity, k.image_small, k.payload,
+               (SELECT p.market FROM price_history p
+                 WHERE p.card_id = w.card_id AND p.variant = w.variant
+                   AND p.currency = $currency AND p.market IS NOT NULL
+                 ORDER BY p.captured_on DESC LIMIT 1),
+               w.met_since
+        FROM wants w
+        JOIN cards k ON k.id = w.card_id
+        """;
+
+    private string PreferredCurrency()
+        => sources.FirstOrDefault(s => s.Id == settings.PreferredPriceSource)?.Currency ?? "USD";
+
+    /// <summary>
+    /// Stamps every want that has come down to its target, and clears the ones that
+    /// have gone back above.
+    ///
+    /// Called both when the list is read and after the daily price capture, so the
+    /// date is when the price actually crossed rather than when you next looked.
+    /// Returns the wants that crossed on this pass — nothing acts on that yet, but it
+    /// is what a notification would be built from, and counting it here is what makes
+    /// "new since last time" possible at all.
+    /// </summary>
+    public IReadOnlyList<long> RefreshAlerts()
+    {
+        using var conn = db.Open();
+
+        var met = new List<(long Id, bool Met, bool Stamped)>();
+        using (var read = conn.CreateCommand())
+        {
+            read.CommandText = SelectWants;
+            read.Parameters.AddWithValue("$currency", PreferredCurrency());
+            using var r = read.ExecuteReader();
+            while (r.Read())
+            {
+                var item = Map(r);
+                met.Add((item.Id, item.AtOrBelowTarget, item.MetSince is not null));
+            }
+        }
+
+        var crossed = new List<long>();
+        var now = DateTime.UtcNow.ToString("o");
+
+        foreach (var (id, isMet, stamped) in met)
+        {
+            if (isMet == stamped) continue;
+
+            using var write = conn.CreateCommand();
+            write.CommandText = "UPDATE wants SET met_since = $when WHERE id = $id";
+            write.Parameters.AddWithValue("$when", isMet ? now : DBNull.Value);
+            write.Parameters.AddWithValue("$id", id);
+            write.ExecuteNonQuery();
+
+            if (isMet) crossed.Add(id);
+        }
+
+        return crossed;
     }
 
     /// <summary>
@@ -139,7 +208,10 @@ public sealed class WantsService(Db db, CollectionService collection)
 
         using var doc = JsonDocument.Parse(r.GetString(12));
         var card = doc.RootElement;
-        var market = Pricing.ForVariant(card, variant).Market;
+
+        // Catalogue figure first, then whatever was last recorded, matching the grid.
+        var tracked = r.IsDBNull(13) ? (double?)null : r.GetDouble(13);
+        var market = Pricing.ForVariant(card, variant).Market ?? tracked;
 
         var difference = target is { } t && market is { } m ? m - t : (double?)null;
 
@@ -159,7 +231,8 @@ public sealed class WantsService(Db db, CollectionService collection)
             AddedAt: r.GetString(6),
             MarketPrice: market,
             DifferenceToTarget: difference is { } d ? Math.Round(d, 2) : null,
-            AtOrBelowTarget: difference is <= 0);
+            AtOrBelowTarget: difference is <= 0,
+            MetSince: r.IsDBNull(14) ? null : r.GetString(14));
     }
 
     /// <summary>Every card id on the list, for badging search and set-browser results.</summary>
