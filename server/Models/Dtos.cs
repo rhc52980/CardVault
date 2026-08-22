@@ -75,6 +75,10 @@ public sealed record CollectionItem(
     string Variant,
     string Condition,
     string? Grade,
+    /// <summary>The grader read out of <see cref="Grade"/>, when it names one.</summary>
+    string? GradeCompany,
+    /// <summary>The number read out of <see cref="Grade"/>, on the 1-10 scale.</summary>
+    double? GradeValue,
     double? PurchasePrice,
     string? PurchaseDate,
     string? Notes,
@@ -93,12 +97,23 @@ public sealed record CollectionItem(
     /// <summary>Printing language as an ISO code â€” "en", "ja", "zh-tw".</summary>
     string Language,
     /// <summary>
-    /// False when the prices we hold don't describe this copy, which today means any
-    /// printing other than English: every source reports the English market. Such a
-    /// copy is worth whatever <see cref="ManualValue"/> says and nothing otherwise,
-    /// and the UI says so rather than showing a figure from the wrong market.
+    /// False when the prices we hold don't describe this copy — a slab, or a printing
+    /// in a language none of our sources cover. Such a copy is worth whatever
+    /// <see cref="ManualValue"/> says and nothing otherwise, and the UI says so
+    /// rather than showing a figure from the wrong market.
     /// </summary>
     bool Priced,
+    /// <summary>
+    /// The market figure we hold but won't count, when <see cref="Priced"/> is false.
+    /// Kept because it's the number you'd judge against when valuing a slab yourself,
+    /// and losing it would mean looking the same card up somewhere else.
+    /// </summary>
+    double? ReferencePrice,
+    /// <summary>
+    /// Why the figure doesn't count: "graded", "language", or null when it does.
+    /// A code rather than a sentence, so the wording lives with the rest of the copy.
+    /// </summary>
+    string? UnpricedReason,
     /// <summary>
     /// The CSV import this card arrived in, or null if it was added by hand. Cards
     /// from an import you haven't acknowledged yet are marked in the vault.
@@ -322,6 +337,10 @@ public sealed record SaleRecord(
     string? Variant,
     string? Condition,
     string? Grade,
+    /// <summary>The grader read out of <see cref="Grade"/>, when it names one.</summary>
+    string? GradeCompany,
+    /// <summary>The number read out of <see cref="Grade"/>, on the 1-10 scale.</summary>
+    double? GradeValue,
     /// <summary>Printing language, or null for sales predating the column.</summary>
     string? Language,
     double? PurchasePrice,

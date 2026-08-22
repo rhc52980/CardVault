@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api, cardImage, money } from '../api'
-import { DEFAULT_LANGUAGE, languageName, prettyVariant } from '../lib/cardStyles'
+import { DEFAULT_LANGUAGE, gradeLabel, languageName, prettyVariant } from '../lib/cardStyles'
 import type { SaleRecord } from '../types'
 import { ConfirmButton } from './ConfirmButton'
 
@@ -113,7 +113,7 @@ export function SoldView({ onChanged }: { onChanged: () => void }) {
               </div>
               <div className="mt-0.5 text-xs text-mute">
                 {s.saleDate} · {s.variant ? prettyVariant(s.variant) : ''} {s.condition}
-                {s.grade ? ` · ${s.grade}` : ''}
+                {s.grade ? ` · ${gradeLabel(s)}` : ''}
                 {s.language && s.language !== DEFAULT_LANGUAGE ? ` · ${languageName(s.language)}` : ''}
               </div>
               <div className="mt-0.5 text-xs text-mute">

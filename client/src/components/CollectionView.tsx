@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api, cardImage, money } from '../api'
-import { languageName, languageTag, rarityClass } from '../lib/cardStyles'
+import { gradeLabel, languageName, languageTag, rarityClass } from '../lib/cardStyles'
 import type { CollectionItem, ImportBatchSummary } from '../types'
 import { ImportsView } from './ImportsView'
 import { CardDetail } from './CardDetail'
@@ -43,6 +43,7 @@ export function CollectionView({
   const [pane, setPane] = useState<'owned' | 'imports' | 'wanted' | 'sold'>('owned')
   const [locationFilter, setLocationFilter] = useState('')
   const [languageFilter, setLanguageFilter] = useState('')
+  const [gradedFilter, setGradedFilter] = useState('')
   const [batchFilter, setBatchFilter] = useState('')
   const [batches, setBatches] = useState<ImportBatchSummary[]>([])
 
@@ -139,6 +140,8 @@ export function CollectionView({
 
     if (setFilter_) out = out.filter((i) => i.setId === setFilter_)
     if (languageFilter) out = out.filter((i) => i.language === languageFilter)
+    if (gradedFilter === 'graded') out = out.filter((i) => !!i.grade)
+    else if (gradedFilter === 'raw') out = out.filter((i) => !i.grade)
     if (batchFilter) out = out.filter((i) => i.importBatch === batchFilter)
     if (locationFilter) {
       out =
@@ -164,7 +167,7 @@ export function CollectionView({
       }
     })
     return sorted
-  }, [items, filter, setFilter_, languageFilter, locationFilter, batchFilter, sort, kind])
+  }, [items, filter, setFilter_, languageFilter, gradedFilter, locationFilter, batchFilter, sort, kind])
 
   const ownedForDetail = detailCardId ? items.filter((i) => i.cardId === detailCardId) : []
   const visibleValue = visible.reduce((sum, i) => sum + (i.lineValue ?? 0), 0)
@@ -395,6 +398,18 @@ export function CollectionView({
           </select>
         )}
 
+        {items.some((i) => i.grade) && (
+          <select
+            value={gradedFilter}
+            onChange={(e) => setGradedFilter(e.target.value)}
+            className={control}
+          >
+            <option value="">Graded or not</option>
+            <option value="graded">Graded only</option>
+            <option value="raw">Raw only</option>
+          </select>
+        )}
+
         {languages.length > 1 && (
           <select
             value={languageFilter}
@@ -513,8 +528,7 @@ export function CollectionView({
             footer={
               <div className="text-[11px] text-white/85">
                 <div className="truncate">
-                  {item.condition}
-                  {item.grade ? ` · ${item.grade}` : ''}
+                  {item.grade ? gradeLabel(item) : item.condition}
                   {languageTag(item.language) && (
                     <span className="ml-1 rounded bg-white/15 px-1 text-[10px] tracking-wide">
                       {languageTag(item.language)}

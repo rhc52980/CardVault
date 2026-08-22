@@ -77,6 +77,22 @@ Set completion still counts a card you own in any language. The catalogue entry 
 shared between printings, and a set you filled with Japanese cards is a set you
 filled.
 
+## Graded cards
+
+Put a grade on an entry — a company from the dropdown and a number, or free text if
+your slab doesn't fit that — and CardVault treats it as the slab it is. The grade is
+shown on the tile in place of the condition, and a **Graded only / Raw only** filter
+appears in the toolbar once you own one.
+
+**A graded card has no market price either.** Every figure the app holds is for a raw
+card, and a slab is worth a multiple of one — occasionally a fraction, for a common in
+a cheap grade. There is no honest way to derive the second number from the first, so
+the raw price is shown as a reference to judge against and is not counted as what the
+slab is worth. Give it a value of your own and it counts normally.
+
+Hand-entered slabs are the exception. They're priced by an eBay search on the name you
+typed, so "Base Set Charizard PSA 10" is already a graded price and it stands.
+
 ## Want list
 
 Cards you're hunting live under **My vault → Wanted**. Add them from the
