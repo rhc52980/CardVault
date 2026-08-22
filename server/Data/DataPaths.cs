@@ -24,6 +24,16 @@ public sealed class DataPaths
     /// </summary>
     public string CatalogueImagesDirectory => Path.Combine(Root, "catalogue-images");
 
+    /// <summary>
+    /// Your own photographs of the cards you own, as opposed to catalogue artwork.
+    ///
+    /// Its own folder, created only when the feature is switched on, so an unused
+    /// feature leaves nothing behind and turning it off is one directory to remove.
+    /// Not covered by the automatic backup, which copies the database alone --
+    /// scans are large and would turn a quick safety copy into a slow one.
+    /// </summary>
+    public string PhotosDirectory => Path.Combine(Root, "photos");
+
     /// <summary>Where data lived before it was moved out of the app folder.</summary>
     public static string LegacyDirectory => Path.Combine(AppContext.BaseDirectory, "data");
 

@@ -88,6 +88,10 @@ builder.Services.AddSingleton<ImportService>();
 builder.Services.AddSingleton<SetsService>();
 builder.Services.AddSingleton<SalesService>();
 builder.Services.AddSingleton<WantsService>();
+
+// Your own photographs of your own cards, as opposed to catalogue artwork. Off
+// until switched on, so an unused feature leaves no folder behind.
+builder.Services.AddSingleton<PhotoService>();
 builder.Services.AddSingleton<AuthService>();
 builder.Services.AddHttpClient();
 builder.Services.AddSingleton(sp => new UpdateChecker(
@@ -376,11 +380,58 @@ app.MapPost("/api/collection", async (
 app.MapPatch("/api/collection/{id:long}", (long id, UpdateEntryRequest req, CollectionService collection)
     => collection.Update(id, req) ? Results.NoContent() : Results.NotFound());
 
-app.MapDelete("/api/collection/{id:long}", (long id, CollectionService collection, CustomItemService custom) =>
+app.MapDelete("/api/collection/{id:long}", (
+    long id, CollectionService collection, CustomItemService custom, PhotoService photos) =>
 {
     if (!collection.Delete(id)) return Results.NotFound();
     custom.CleanUpOrphans();
+    photos.CleanUpOrphans();
     return Results.NoContent();
+});
+
+// -------------------------------------------------------------- your own photos
+
+app.MapGet("/api/photos", (PhotoService photos) => Results.Ok(photos.Status()));
+
+app.MapPut("/api/photos/enabled", (ToggleRequest req, PhotoService photos) =>
+{
+    photos.SetEnabled(req.Enabled);
+    return Results.Ok(photos.Status());
+});
+
+/// Removes every photo and the folder with them. Its own endpoint rather than a side
+/// effect of switching the feature off: one of those is reversible and the other is
+/// emphatically not, and a toggle that quietly deleted files would be indefensible.
+app.MapDelete("/api/photos", (PhotoService photos) =>
+{
+    var removed = photos.DeleteAll();
+    return Results.Ok(new { removed, status = photos.Status() });
+});
+
+app.MapPost("/api/collection/{id:long}/photo", async (
+    long id, HttpRequest request, PhotoService photos, CancellationToken ct) =>
+{
+    if (!request.HasFormContentType) return Results.BadRequest(new { error = "Send the image as a file upload." });
+
+    var form = await request.ReadFormAsync(ct);
+    var file = form.Files.GetFile("photo") ?? form.Files.FirstOrDefault();
+    if (file is null) return Results.BadRequest(new { error = "No file came through." });
+
+    await using var stream = file.OpenReadStream();
+    var (ok, error) = await photos.AttachAsync(id, stream, file.FileName, ct);
+    return ok ? Results.Ok(photos.Status()) : Results.BadRequest(new { error });
+});
+
+app.MapDelete("/api/collection/{id:long}/photo", (long id, PhotoService photos)
+    => photos.Detach(id) ? Results.NoContent() : Results.NotFound());
+
+/// Served from its own route rather than /img, which is the catalogue's cache and
+/// keyed by card. Two copies of one card can carry different photos, so this is
+/// keyed by entry.
+app.MapGet("/api/collection/{id:long}/photo", (long id, PhotoService photos) =>
+{
+    if (photos.Resolve(id) is not var (path, type)) return Results.NotFound();
+    return Results.File(path, type);
 });
 
 /// The same edit applied to a whole selection. One request rather than one per card:
@@ -397,12 +448,13 @@ app.MapPatch("/api/collection/bulk", (BulkUpdateRequest req, CollectionService c
 /// Removing a selection. A POST rather than a DELETE because it carries a body, and
 /// enough clients and proxies quietly drop a body on DELETE to make that a bad bet.
 app.MapPost("/api/collection/bulk/remove", (
-    BulkRemoveRequest req, CollectionService collection, CustomItemService custom) =>
+    BulkRemoveRequest req, CollectionService collection, CustomItemService custom, PhotoService photos) =>
 {
     if (req.Ids.Count == 0) return Results.BadRequest(new { error = "No cards were selected." });
 
     var removed = collection.DeleteMany(req.Ids);
     custom.CleanUpOrphans();
+    photos.CleanUpOrphans();
     return Results.Ok(new { removed });
 });
 
@@ -524,9 +576,14 @@ app.MapPost("/api/wants/{id:long}/acquire", (long id, AddEntryRequest req, Wants
 
 // ------------------------------------------------------------- sales & export
 
-app.MapPost("/api/collection/{id:long}/sell", (long id, SellRequest req, SalesService sales) =>
+app.MapPost("/api/collection/{id:long}/sell", (long id, SellRequest req, SalesService sales, PhotoService photos) =>
 {
     var (ok, error, saleId) = sales.Sell(id, req);
+
+    // Selling the last copy removes the entry, so its photo has nothing left to
+    // describe. A partial sale keeps the entry and the photo with it.
+    if (ok) photos.CleanUpOrphans();
+
     return ok ? Results.Ok(new { saleId }) : Results.BadRequest(new { error });
 });
 
@@ -896,9 +953,15 @@ app.MapPost("/api/imports/acknowledge", (ImportBatchService batches)
 
 // Removes the cards an import added. Sales and price history are deliberately left
 // alone — see ImportBatchService.Remove for why neither is at risk.
-app.MapDelete("/api/imports/{id}", (string id, ImportBatchService batches) =>
+app.MapDelete("/api/imports/{id}", (string id, ImportBatchService batches, PhotoService photos) =>
 {
     var (found, removed) = batches.Remove(id);
+
+    // Undoing an import takes its cards, and any photo attached to one goes with it.
+    // Swept rather than deleted alongside each row: there are several ways for an
+    // entry to disappear, and a sweep can't be the one someone forgets to call.
+    if (found) photos.CleanUpOrphans();
+
     return found ? Results.Ok(new { removed }) : Results.NotFound();
 });
 

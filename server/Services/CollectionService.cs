@@ -30,7 +30,7 @@ public sealed class CollectionService(Db db, SettingsService settings, IEnumerab
                  WHERE p.card_id = c.card_id AND p.variant = c.variant
                    AND p.currency = $currency AND p.market IS NOT NULL
                  ORDER BY p.captured_on DESC LIMIT 1),
-               c.import_batch, c.language
+               c.import_batch, c.language, c.photo
         FROM collection c
         JOIN cards k ON k.id = c.card_id
         """;
@@ -454,6 +454,7 @@ public sealed class CollectionService(Db db, SettingsService settings, IEnumerab
             IsCustom: isCustom,
             Location: r.IsDBNull(26) ? null : r.GetString(26),
             Language: language,
+            HasPhoto: !r.IsDBNull(30),
             Priced: priced,
             ReferencePrice: referencePrice,
             UnpricedReason: unpricedReason,

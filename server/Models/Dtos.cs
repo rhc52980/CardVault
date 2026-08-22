@@ -12,8 +12,8 @@ public sealed record AddEntryRequest(
     double? ManualValue = null,
     string? Location = null,
     /// <summary>
-    /// Printing language, as an ISO code. Anything unrecognised â€” including the
-    /// nothing an older client sends â€” is stored as English.
+    /// Printing language, as an ISO code. Anything unrecognised — including the
+    /// nothing an older client sends — is stored as English.
     /// </summary>
     string? Language = null);
 
@@ -101,8 +101,13 @@ public sealed record CollectionItem(
     bool IsCustom,
     /// <summary>Where the card physically lives, so you can actually find it.</summary>
     string? Location,
-    /// <summary>Printing language as an ISO code â€” "en", "ja", "zh-tw".</summary>
+    /// <summary>Printing language as an ISO code — "en", "ja", "zh-tw".</summary>
     string Language,
+    /// <summary>
+    /// True when you've attached your own photograph of this copy. The image itself
+    /// comes from its own endpoint rather than riding along in the grid payload.
+    /// </summary>
+    bool HasPhoto,
     /// <summary>
     /// False when the prices we hold don't describe this copy — a slab, or a printing
     /// in a language none of our sources cover. Such a copy is worth whatever
@@ -261,6 +266,13 @@ public sealed record PriceRefreshProgress(
     string? FinishedAt);
 
 public sealed record ToggleRequest(bool Enabled);
+
+/// <summary>
+/// Whether card photos are switched on, and what they're costing you in disk.
+/// The size is reported because these are full scans, not thumbnails, and a folder
+/// quietly growing to several gigabytes is the sort of thing worth being told about.
+/// </summary>
+public sealed record PhotoStatus(bool Enabled, int Count, long Bytes);
 
 public sealed record PasswordRequest(string? Password);
 
