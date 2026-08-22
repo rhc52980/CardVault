@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { api, cardImage, money } from '../api'
 import {
   DEFAULT_LANGUAGE,
@@ -29,6 +29,22 @@ export function CardDetail({
 }) {
   const [card, setCard] = useState<FullCard | null>(null)
   const [error, setError] = useState<string | null>(null)
+
+  // Asked here rather than threaded down from every screen that opens a card. It's
+  // one small request when a panel opens, and it keeps the feature's on/off state a
+  // detail of the one place that renders its controls.
+  const [photosEnabled, setPhotosEnabled] = useState(false)
+
+  useEffect(() => {
+    let active = true
+    api
+      .photoStatus()
+      .then((s) => active && setPhotosEnabled(s.enabled))
+      .catch(() => active && setPhotosEnabled(false))
+    return () => {
+      active = false
+    }
+  }, [])
 
   useEffect(() => {
     let active = true
@@ -205,7 +221,7 @@ export function CardDetail({
             ) : (
               <div className="space-y-2">
                 {owned.map((o) => (
-                  <OwnedRow key={o.id} entry={o} onChanged={onChanged} />
+                  <OwnedRow key={o.id} entry={o} photosEnabled={photosEnabled} onChanged={onChanged} />
                 ))}
               </div>
             )}
@@ -216,8 +232,45 @@ export function CardDetail({
   )
 }
 
-function OwnedRow({ entry, onChanged }: { entry: CollectionItem; onChanged: () => void }) {
+function OwnedRow({
+  entry,
+  photosEnabled,
+  onChanged,
+}: {
+  entry: CollectionItem
+  photosEnabled: boolean
+  onChanged: () => void
+}) {
   const [busy, setBusy] = useState(false)
+  const photoInput = useRef<HTMLInputElement>(null)
+  // Bumped after an upload so the browser refetches rather than showing the old
+  // file from cache — the URL is the same every time, which is otherwise a trap.
+  const [photoStamp, setPhotoStamp] = useState(0)
+  const [photoError, setPhotoError] = useState<string | null>(null)
+
+  async function attachPhoto(file: File) {
+    setBusy(true)
+    setPhotoError(null)
+    try {
+      await api.attachPhoto(entry.id, file)
+      setPhotoStamp(Date.now())
+      onChanged()
+    } catch (e) {
+      setPhotoError(e instanceof Error ? e.message : 'Could not save that photo')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function removePhoto() {
+    setBusy(true)
+    try {
+      await api.detachPhoto(entry.id)
+      onChanged()
+    } finally {
+      setBusy(false)
+    }
+  }
   const [selling, setSelling] = useState(false)
   const [editingValue, setEditingValue] = useState(false)
   const [draftValue, setDraftValue] = useState(String(entry.manualValue ?? ''))
@@ -492,6 +545,61 @@ function OwnedRow({ entry, onChanged }: { entry: CollectionItem; onChanged: () =
             ))}
           </select>
         </label>
+
+        {photosEnabled && (
+          <div className="mt-2">
+            <input
+              ref={photoInput}
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0]
+                // Cleared so choosing the same file twice still fires a change.
+                e.target.value = ''
+                if (file) void attachPhoto(file)
+              }}
+            />
+
+            {entry.hasPhoto ? (
+              <div className="flex items-start gap-2">
+                <a href={api.photoUrl(entry.id, photoStamp)} target="_blank" rel="noreferrer">
+                  <img
+                    src={api.photoUrl(entry.id, photoStamp)}
+                    alt="Your photo of this copy"
+                    className="h-20 w-14 rounded-md object-cover ring-1 ring-edge transition hover:ring-arc"
+                  />
+                </a>
+                <div className="flex flex-col gap-1">
+                  <button
+                    onClick={() => photoInput.current?.click()}
+                    disabled={busy}
+                    className="text-left text-xs text-arc transition hover:underline disabled:opacity-40"
+                  >
+                    Replace photo
+                  </button>
+                  <button
+                    onClick={removePhoto}
+                    disabled={busy}
+                    className="text-left text-xs text-mute transition hover:text-rose disabled:opacity-40"
+                  >
+                    Remove photo
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                onClick={() => photoInput.current?.click()}
+                disabled={busy}
+                className="block text-xs text-mute transition hover:text-arc disabled:opacity-40"
+              >
+                📷 Add a photo of this copy
+              </button>
+            )}
+
+            {photoError && <div className="mt-1 text-xs text-rose">{photoError}</div>}
+          </div>
+        )}
 
         {entry.notes && <div className="mt-0.5 truncate text-xs text-mute italic">{entry.notes}</div>}
       </div>

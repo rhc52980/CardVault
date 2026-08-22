@@ -53,6 +53,23 @@ Locations come through CSV import too — the column can be called `Location`,
 `Storage`, `Binder`, `Box`, `Where`, `Stored` or `Placement` — and are included
 in the CSV export.
 
+## Photos of your own cards
+
+Off by default. Turn it on in **Settings → Photos of your own cards**, then open any
+card in your vault and use **Add a photo of this copy**.
+
+Catalogue artwork shows what a card looks like in general; this is for what *your*
+copy looks like — the corner wear you're claiming, the centring, the slab label,
+which of two copies is which. It hangs off the entry rather than the card, so two
+copies of the same card can carry different photos. PNG, JPEG or WebP, up to 25 MB.
+
+Photos live in their own folder beside your collection, created only once you switch
+the feature on. Turning it back off **does not delete anything** — the files stay and
+reappear if you switch it on again. Deleting them is a separate button that says so.
+
+**They are not in the automatic backup**, which copies the database alone: full scans
+would turn a quick safety copy into a slow one. Keep your originals.
+
 ## Editing a lot of cards at once
 
 Hover a card and a **+** appears in its corner; click it to select. Shift-click
