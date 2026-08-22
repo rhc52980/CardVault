@@ -1,7 +1,15 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { api, cardImage, money } from '../api'
-import { gradeLabel, languageName, languageTag, rarityClass } from '../lib/cardStyles'
+import {
+  LANGUAGES,
+  LANGUAGE_LABELS,
+  gradeLabel,
+  languageName,
+  languageTag,
+  rarityClass,
+} from '../lib/cardStyles'
 import type { CollectionItem, ImportBatchSummary } from '../types'
+import { ConfirmButton } from './ConfirmButton'
 import { ImportsView } from './ImportsView'
 import { CardDetail } from './CardDetail'
 import { CardTile } from './CardTile'
@@ -50,6 +58,11 @@ export function CollectionView({
   // thing on that list worth interrupting you for, and it's no use only being
   // visible once you've already gone looking for it.
   const [wantsAtPrice, setWantsAtPrice] = useState(0)
+  const [selected, setSelected] = useState<Set<number>>(new Set())
+  // The tile last clicked, so shift-click knows what to extend from. A ref rather
+  // than state: it is read by the very next click, and two clicks close enough
+  // together to land in one render would otherwise extend from a stale anchor.
+  const anchor = useRef<number | null>(null)
 
   // Reloaded whenever the collection is, which covers an import having just added
   // cards without needing to be told about it separately.
@@ -177,6 +190,61 @@ export function CollectionView({
   }, [items, filter, setFilter_, languageFilter, gradedFilter, locationFilter, batchFilter, sort, kind])
 
   const ownedForDetail = detailCardId ? items.filter((i) => i.cardId === detailCardId) : []
+
+  /**
+   * Selection is pruned to what's on screen whenever the filters change.
+   *
+   * Otherwise a card selected under one filter stays selected after you narrow to a
+   * different set, and "delete 40 cards" quietly takes a few you can no longer see.
+   * What you can see is what you can act on.
+   */
+  useEffect(() => {
+    setSelected((prev) => {
+      if (prev.size === 0) return prev
+      const onScreen = new Set(visible.map((i) => i.id))
+      const next = new Set([...prev].filter((id) => onScreen.has(id)))
+      return next.size === prev.size ? prev : next
+    })
+  }, [visible])
+
+  function toggleSelect(id: number, extend: boolean) {
+    // Read before the updater, not inside it. React runs an updater when it renders,
+    // by which point the assignment at the bottom of this function has already moved
+    // the anchor to the card just clicked — so a range read lazily would always
+    // collapse to that one card.
+    const from_ = anchor.current
+    anchor.current = id
+
+    setSelected((prev) => {
+      const next = new Set(prev)
+
+      // Shift extends from the last tile you touched, over the order on screen —
+      // which is the order you're looking at, not the order they were added.
+      if (extend && from_ != null) {
+        const order = visible.map((i) => i.id)
+        const from = order.indexOf(from_)
+        const to = order.indexOf(id)
+        if (from >= 0 && to >= 0) {
+          const [lo, hi] = from < to ? [from, to] : [to, from]
+          for (const between of order.slice(lo, hi + 1)) next.add(between)
+          return next
+        }
+      }
+
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const selectedItems = visible.filter((i) => selected.has(i.id))
+
+  async function applyToSelection(run: (ids: number[]) => Promise<unknown>) {
+    await run([...selected])
+    setSelected(new Set())
+    anchor.current = null
+    onChanged()
+  }
   const visibleValue = visible.reduce((sum, i) => sum + (i.lineValue ?? 0), 0)
 
   if (loading) {
@@ -468,15 +536,31 @@ export function CollectionView({
         </button>
       </div>
 
-      <p className="text-sm text-mute">
-        {visible.length.toLocaleString()} of {items.length.toLocaleString()} entries ·{' '}
-        <span className="text-gold tabular-nums">{money(visibleValue)}</span> shown
-      </p>
+      {selected.size > 0 ? (
+        <BulkBar
+          count={selected.size}
+          value={selectedItems.reduce((sum, i) => sum + (i.lineValue ?? 0), 0)}
+          onSelectAll={() => setSelected(new Set(visible.map((i) => i.id)))}
+          allSelected={selected.size === visible.length}
+          onClear={() => {
+            setSelected(new Set())
+            anchor.current = null
+          }}
+          onApply={applyToSelection}
+        />
+      ) : (
+        <p className="text-sm text-mute">
+          {visible.length.toLocaleString()} of {items.length.toLocaleString()} entries ·{' '}
+          <span className="text-gold tabular-nums">{money(visibleValue)}</span> shown
+        </p>
+      )}
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6">
         {visible.map((item) => (
           <CardTile
             key={item.id}
+            selected={selected.has(item.id)}
+            onToggleSelect={(extend) => toggleSelect(item.id, extend)}
             highlight={!!item.importBatch && unreviewedIds.has(item.importBatch)}
             image={item.imageSmall ? cardImage(item.cardId, 'small') : null}
             fallbackImage={item.imageSmall}
@@ -560,6 +644,115 @@ export function CollectionView({
       )}
 
       {manualOpen && <ManualEntryDialog onClose={() => setManualOpen(false)} onAdded={onChanged} />}
+    </div>
+  )
+}
+
+/**
+ * What you can do to a selection.
+ *
+ * Replaces the count line rather than appearing above it: while a selection is
+ * live, how many cards are in it and what they're worth is the more useful
+ * version of the same fact, and stacking two summaries would just push the grid
+ * down the page.
+ *
+ * Deliberately not offering a bulk sell. A lot sale is one price for the whole
+ * pile, and splitting it back across the cards means inventing a per-card figure
+ * that then feeds realised profit. Better to have no feature than a made-up
+ * number in the ledger.
+ */
+function BulkBar({
+  count,
+  value,
+  allSelected,
+  onSelectAll,
+  onClear,
+  onApply,
+}: {
+  count: number
+  value: number
+  allSelected: boolean
+  onSelectAll: () => void
+  onClear: () => void
+  onApply: (run: (ids: number[]) => Promise<unknown>) => Promise<void>
+}) {
+  const [busy, setBusy] = useState(false)
+  const [location, setLocation] = useState('')
+  const [language, setLanguage] = useState('')
+
+  async function run(fn: (ids: number[]) => Promise<unknown>) {
+    setBusy(true)
+    try {
+      await onApply(fn)
+      setLocation('')
+      setLanguage('')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const control =
+    'rounded-lg border border-edge bg-abyss px-2.5 py-1.5 text-sm text-bright outline-none focus:border-arc disabled:opacity-40'
+
+  return (
+    <div className="panel flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl px-4 py-3">
+      <div className="text-sm font-medium text-bright">
+        {count.toLocaleString()} selected
+        {value > 0 && <span className="ml-2 text-gold tabular-nums">{money(value)}</span>}
+      </div>
+
+      {!allSelected && (
+        <button onClick={onSelectAll} className="text-xs text-arc transition hover:underline">
+          Select all shown
+        </button>
+      )}
+      <button onClick={onClear} className="text-xs text-mute transition hover:text-bright">
+        Clear
+      </button>
+
+      <div className="ml-auto flex flex-wrap items-center gap-2">
+        <input
+          value={location}
+          onChange={(e) => setLocation(e.target.value)}
+          placeholder="Move to…"
+          className={`${control} w-40`}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && location.trim()) void run((ids) => api.updateMany(ids, { location }))
+          }}
+        />
+        <button
+          disabled={busy || !location.trim()}
+          onClick={() => void run((ids) => api.updateMany(ids, { location }))}
+          className="rounded-lg bg-arc px-3 py-1.5 text-sm text-white transition hover:brightness-110 disabled:opacity-40"
+        >
+          Move
+        </button>
+
+        <select
+          value={language}
+          disabled={busy}
+          onChange={(e) => {
+            const next = e.target.value
+            setLanguage(next)
+            if (next) void run((ids) => api.updateMany(ids, { language: next }))
+          }}
+          className={control}
+        >
+          <option value="">Set language…</option>
+          {LANGUAGES.map((l) => (
+            <option key={l} value={l}>
+              {LANGUAGE_LABELS[l]}
+            </option>
+          ))}
+        </select>
+
+        <ConfirmButton
+          disabled={busy}
+          label={`Remove ${count}`}
+          confirm={`Really remove ${count}`}
+          onConfirm={() => run((ids) => api.removeMany(ids))}
+        />
+      </div>
     </div>
   )
 }

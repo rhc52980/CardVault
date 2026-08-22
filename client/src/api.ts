@@ -128,6 +128,27 @@ export const api = {
     if (!res.ok) throw new Error(`Could not delete entry ${id}`)
   },
 
+  /** One edit applied to a whole selection. Returns how many rows it touched. */
+  async updateMany(ids: number[], patch: UpdateEntryRequest) {
+    const res = await fetch('/api/collection/bulk', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids, update: patch }),
+    })
+    if (!res.ok) throw new Error('Could not update those cards')
+    return (await res.json()) as { changed: number }
+  },
+
+  async removeMany(ids: number[]) {
+    const res = await fetch('/api/collection/bulk/remove', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids }),
+    })
+    if (!res.ok) throw new Error('Could not remove those cards')
+    return (await res.json()) as { removed: number }
+  },
+
   /** Starts a refresh; poll refreshProgress for how it's getting on. */
   refreshPrices() {
     return fetch('/api/prices/snapshot', { method: 'POST' }).then(json<PriceRefreshProgress>)
