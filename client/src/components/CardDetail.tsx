@@ -4,6 +4,7 @@ import {
   DEFAULT_LANGUAGE,
   LANGUAGES,
   LANGUAGE_LABELS,
+  gradeLabel,
   languageName,
   prettyVariant,
   rarityClass,
@@ -315,7 +316,7 @@ function OwnedRow({ entry, onChanged }: { entry: CollectionItem; onChanged: () =
       <div className="min-w-0 flex-1">
         <div className="truncate">
           {prettyVariant(entry.variant)} · {entry.condition}
-          {entry.grade ? ` · ${entry.grade}` : ''}
+          {entry.grade ? ` · ${gradeLabel(entry)}` : ''}
           {entry.language !== DEFAULT_LANGUAGE ? ` · ${languageName(entry.language)}` : ''}
         </div>
         <div className="mt-0.5 text-xs text-mute">
@@ -331,14 +332,24 @@ function OwnedRow({ entry, onChanged }: { entry: CollectionItem; onChanged: () =
           )}
         </div>
 
-        {entry.manualValue != null && entry.marketPrice != null && (
-          <div className="mt-0.5 text-xs text-mute">Ungraded market price is {money(entry.marketPrice)}</div>
+        {entry.manualValue != null && entry.priced && entry.marketPrice != null && (
+          <div className="mt-0.5 text-xs text-mute">Market price is {money(entry.marketPrice)}</div>
         )}
 
         {!entry.priced && (
           <div className="mt-0.5 text-xs text-amber-300/80">
-            No market price: our prices come from a catalogue of the English printings, and
-            this is the {languageName(entry.language)} one.
+            {entry.unpricedReason === 'graded' ? (
+              <>
+                No market price: every figure we hold is for a raw card, and a slab is worth
+                a multiple of one — sometimes a fraction.
+              </>
+            ) : (
+              <>
+                No market price: our prices come from a catalogue of the English printings, and
+                this is the {languageName(entry.language)} one.
+              </>
+            )}
+            {entry.referencePrice != null && <> A raw copy trades at {money(entry.referencePrice)}.</>}
             {entry.manualValue == null && ' Set your own value to have it count towards your total.'}
           </div>
         )}

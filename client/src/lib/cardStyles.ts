@@ -86,6 +86,28 @@ export const LANGUAGE_LABELS: Record<string, string> = {
 
 export const DEFAULT_LANGUAGE = 'en'
 
+/**
+ * Graders offered in the picker. The grade itself is stored as one string the server
+ * parses, so this list only has to cover what people pick from — anything else can
+ * still be typed straight into the box.
+ */
+export const GRADE_COMPANIES = ['PSA', 'BGS', 'CGC', 'SGC', 'ACE', 'TAG'] as const
+
+/**
+ * "PSA 9" from whatever was typed, falling back to the raw text. The parsing happens
+ * on the server so there is one set of rules; this only picks which of its answers
+ * to show.
+ */
+export function gradeLabel(entry: {
+  grade?: string | null
+  gradeCompany?: string | null
+  gradeValue?: number | null
+}) {
+  if (!entry.grade) return null
+  if (entry.gradeCompany && entry.gradeValue != null) return `${entry.gradeCompany} ${entry.gradeValue}`
+  return entry.grade
+}
+
 /** "ja" -> "Japanese", and anything unknown back as it came. */
 export function languageName(code?: string | null) {
   if (!code) return ''

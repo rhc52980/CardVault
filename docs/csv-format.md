@@ -43,6 +43,10 @@ Header matching is case-insensitive and treats `_` and `-` as spaces, so `card_i
 Use `Condition` rather than `Grade` for card wear — `Grade` means a slab's
 certification and is a different field.
 
+Anything at all in `Grade` marks the row as graded, which means it is imported with
+no market price: every figure CardVault holds is for a raw card. A cert number is
+fine there and is not mistaken for a grade of twelve million.
+
 ### Values are normalised on the way in
 
 - **Condition** — `Near Mint`, `Lightly Played`, `Excellent`, `Good`, `Poor` and the

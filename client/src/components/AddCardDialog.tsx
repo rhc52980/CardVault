@@ -4,6 +4,7 @@ import {
   CONDITIONS,
   CONDITION_LABELS,
   DEFAULT_LANGUAGE,
+  GRADE_COMPANIES,
   LANGUAGES,
   LANGUAGE_LABELS,
   prettyVariant,
@@ -29,7 +30,12 @@ export function AddCardDialog({
   const [quantity, setQuantity] = useState(1)
   const [condition, setCondition] = useState<string>('NM')
   const [language, setLanguage] = useState<string>(DEFAULT_LANGUAGE)
+  const [gradeCompany, setGradeCompany] = useState('')
   const [grade, setGrade] = useState('')
+
+  // Sent as one string because that's how it's stored: what you wrote is the record,
+  // and the server reads a company and a number back out of it for display.
+  const fullGrade = [gradeCompany, grade.trim()].filter(Boolean).join(' ')
   const [purchasePrice, setPurchasePrice] = useState('')
   const [purchaseDate, setPurchaseDate] = useState('')
   const [notes, setNotes] = useState('')
@@ -47,7 +53,7 @@ export function AddCardDialog({
         quantity,
         variant,
         condition,
-        grade: grade.trim() || null,
+        grade: fullGrade || null,
         purchasePrice: purchasePrice.trim() === '' ? null : Number(purchasePrice),
         purchaseDate: purchaseDate || null,
         notes: notes.trim() || null,
@@ -153,13 +159,34 @@ export function AddCardDialog({
             <label className={label} htmlFor="grade">
               Grade <span className="normal-case">(optional)</span>
             </label>
-            <input
-              id="grade"
-              className={field}
-              placeholder="PSA 9"
-              value={grade}
-              onChange={(e) => setGrade(e.target.value)}
-            />
+            <div className="flex gap-2">
+              <select
+                aria-label="Grading company"
+                className={`${field} w-24 shrink-0`}
+                value={gradeCompany}
+                onChange={(e) => setGradeCompany(e.target.value)}
+              >
+                <option value="">Raw</option>
+                {GRADE_COMPANIES.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+              <input
+                id="grade"
+                className={field}
+                placeholder={gradeCompany ? '9.5' : 'Ungraded'}
+                value={grade}
+                onChange={(e) => setGrade(e.target.value)}
+              />
+            </div>
+            {fullGrade && (
+              <p className="mt-1 text-[11px] leading-snug text-mute">
+                A slab is worth a multiple of the raw card, so this copy will show no market
+                value. Set your own on the card once it's added.
+              </p>
+            )}
           </div>
 
           <div>

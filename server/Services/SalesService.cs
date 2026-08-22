@@ -112,6 +112,7 @@ public sealed class SalesService(Db db, CollectionService collection)
     private static SaleRecord Map(SqliteDataReader r)
     {
         var quantity = r.GetInt32(6);
+        var grade = r.IsDBNull(9) ? null : r.GetString(9);
         var purchasePrice = r.IsDBNull(10) ? (double?)null : r.GetDouble(10);
         var salePrice = r.GetDouble(11);
         var fees = r.IsDBNull(12) ? (double?)null : r.GetDouble(12);
@@ -130,7 +131,9 @@ public sealed class SalesService(Db db, CollectionService collection)
             Quantity: quantity,
             Variant: r.IsDBNull(7) ? null : r.GetString(7),
             Condition: r.IsDBNull(8) ? null : r.GetString(8),
-            Grade: r.IsDBNull(9) ? null : r.GetString(9),
+            Grade: grade,
+            GradeCompany: Grades.Company(grade),
+            GradeValue: Grades.Value(grade),
             // Null for sales recorded before the column existed. Left as null rather
             // than defaulted to English: the ledger is a record of what was true, and
             // it genuinely wasn't asked at the time.
