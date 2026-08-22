@@ -18,6 +18,10 @@ public sealed class PriceSnapshotService(
     PokemonTcgClient api,
     CardCache cache,
     IEnumerable<IPriceSource> sources,
+    // Resolved lazily rather than injected: wants are refreshed as a consequence of a
+    // capture, not something a capture needs in order to run, and taking the service
+    // directly would tie this one's construction to a chain it has no business in.
+    IServiceProvider services,
     ILogger<PriceSnapshotService> log) : BackgroundService
 {
     private static readonly TimeSpan Interval = TimeSpan.FromHours(24);
@@ -239,6 +243,21 @@ public sealed class PriceSnapshotService(
         }
         finally
         {
+            // Fresh prices are exactly when a want can cross its target, so this is the
+            // moment to work that out. In its own try: a want list that fails to update
+            // is not a reason to report the capture itself as failed, and the next read
+            // of the list recomputes it anyway.
+            try
+            {
+                var crossed = services.GetRequiredService<WantsService>().RefreshAlerts();
+                if (crossed.Count > 0)
+                    log.LogInformation("{Count} wanted card(s) came down to your price", crossed.Count);
+            }
+            catch (Exception e)
+            {
+                log.LogWarning(e, "Could not refresh want-list alerts after the price capture");
+            }
+
             // Always clears, so a failure can't leave the UI spinning forever or
             // block the next refresh from starting.
             _refresh = _refresh with

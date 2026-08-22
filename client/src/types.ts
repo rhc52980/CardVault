@@ -96,6 +96,11 @@ export interface WantItem {
   /** Market minus target; negative means it's going for less than you'd pay. */
   differenceToTarget?: number | null
   atOrBelowTarget: boolean
+  /**
+   * When it first came down and stayed there, or null if it hasn't. A drop this
+   * morning and one that has sat for a month are different situations.
+   */
+  metSince?: string | null
 }
 
 export interface AddWantRequest {

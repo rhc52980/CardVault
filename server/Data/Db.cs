@@ -260,6 +260,15 @@ public sealed class Db
         // entry, and the set completion built on it, are shared.
         AddColumn(conn, "collection", "language", "TEXT NOT NULL DEFAULT 'en'");
 
+        // When the market first came down to your target and stayed there, so the want
+        // list can say how long a card has been at your price rather than only that it
+        // is. A drop that happened this morning and one that has sat there a month are
+        // different situations, and the difference is the whole reason to look.
+        //
+        // Cleared the moment the price goes back above, so it always describes the
+        // current run rather than the best it ever did.
+        AddColumn(conn, "wants", "met_since", "TEXT");
+
         // Copied onto the sale for the same reason as condition and grade: the ledger
         // has to keep saying what was sold once the collection row is gone. Nullable
         // because sales recorded before this column existed genuinely don't know.
