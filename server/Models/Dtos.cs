@@ -10,7 +10,12 @@ public sealed record AddEntryRequest(
     string? PurchaseDate = null,
     string? Notes = null,
     double? ManualValue = null,
-    string? Location = null);
+    string? Location = null,
+    /// <summary>
+    /// Printing language, as an ISO code. Anything unrecognised â€” including the
+    /// nothing an older client sends â€” is stored as English.
+    /// </summary>
+    string? Language = null);
 
 public sealed record UpdateEntryRequest(
     int? Quantity = null,
@@ -22,6 +27,7 @@ public sealed record UpdateEntryRequest(
     string? Notes = null,
     double? ManualValue = null,
     string? Location = null,
+    string? Language = null,
     /// <summary>Set true to clear a manual value and fall back to market price.</summary>
     bool ClearManualValue = false,
     /// <summary>
@@ -45,7 +51,8 @@ public sealed record CustomItemRequest(
     double? Value = null,
     double? PurchasePrice = null,
     string? PurchaseDate = null,
-    string? Notes = null);
+    string? Notes = null,
+    string? Language = null);
 
 /// <summary>A card you own, flattened with everything the grid needs to render it.</summary>
 public sealed record CollectionItem(
@@ -83,6 +90,15 @@ public sealed record CollectionItem(
     bool IsCustom,
     /// <summary>Where the card physically lives, so you can actually find it.</summary>
     string? Location,
+    /// <summary>Printing language as an ISO code â€” "en", "ja", "zh-tw".</summary>
+    string Language,
+    /// <summary>
+    /// False when the prices we hold don't describe this copy, which today means any
+    /// printing other than English: every source reports the English market. Such a
+    /// copy is worth whatever <see cref="ManualValue"/> says and nothing otherwise,
+    /// and the UI says so rather than showing a figure from the wrong market.
+    /// </summary>
+    bool Priced,
     /// <summary>
     /// The CSV import this card arrived in, or null if it was added by hand. Cards
     /// from an import you haven't acknowledged yet are marked in the vault.
@@ -306,6 +322,8 @@ public sealed record SaleRecord(
     string? Variant,
     string? Condition,
     string? Grade,
+    /// <summary>Printing language, or null for sales predating the column.</summary>
+    string? Language,
     double? PurchasePrice,
     double SalePrice,
     double? Fees,

@@ -24,14 +24,15 @@ public sealed class ExportService(CollectionService collection, SalesService sal
         var sb = new StringBuilder();
         sb.AppendLine(string.Join(",",
             "Card ID", "Name", "Set", "Number", "Quantity", "Variant", "Condition", "Grade",
-            "Purchase Price", "Purchase Date", "Location", "Notes", "Market Price", "Your Value",
-            "Line Value", "Rarity", "Hand Entered"));
+            "Language", "Purchase Price", "Purchase Date", "Location", "Notes", "Market Price",
+            "Your Value", "Line Value", "Rarity", "Hand Entered"));
 
         foreach (var i in collection.List().OrderBy(i => i.SetName).ThenBy(i => i.Name))
         {
             sb.AppendLine(string.Join(",",
                 Q(i.CardId), Q(i.Name), Q(i.SetName), Q(i.Number), N(i.Quantity), Q(i.Variant),
-                Q(i.Condition), Q(i.Grade), N(i.PurchasePrice), Q(i.PurchaseDate), Q(i.Location),
+                Q(i.Condition), Q(i.Grade), Q(i.Language),
+                N(i.PurchasePrice), Q(i.PurchaseDate), Q(i.Location),
                 Q(i.Notes), N(i.MarketPrice), N(i.ManualValue), N(i.LineValue), Q(i.Rarity),
                 i.IsCustom ? "yes" : "no"));
         }
@@ -44,13 +45,15 @@ public sealed class ExportService(CollectionService collection, SalesService sal
         var sb = new StringBuilder();
         sb.AppendLine(string.Join(",",
             "Sale Date", "Name", "Set", "Number", "Quantity", "Variant", "Condition", "Grade",
-            "Purchase Price", "Sale Price", "Fees", "Proceeds", "Realised Gain", "Notes"));
+            "Language", "Purchase Price", "Sale Price", "Fees", "Proceeds", "Realised Gain",
+            "Notes"));
 
         foreach (var s in sales.List())
         {
             sb.AppendLine(string.Join(",",
                 Q(s.SaleDate), Q(s.CardName), Q(s.SetName), Q(s.Number), N(s.Quantity), Q(s.Variant),
-                Q(s.Condition), Q(s.Grade), N(s.PurchasePrice), N(s.SalePrice), N(s.Fees),
+                Q(s.Condition), Q(s.Grade), Q(s.Language),
+                N(s.PurchasePrice), N(s.SalePrice), N(s.Fees),
                 N(s.Proceeds), N(s.RealisedGain), Q(s.Notes)));
         }
 

@@ -14,6 +14,10 @@ public sealed class CollectionService(Db db, SettingsService settings, IEnumerab
     /// to the preferred market's currency: a dollar number has no business appearing
     /// in a total denominated in euros, and this is the only place a snapshot from
     /// one source could otherwise leak into valuation driven by another.
+    ///
+    /// Language is read but not joined on: prices aren't held per language, which is
+    /// exactly why a non-English copy is left unpriced in <see cref="Map"/> rather
+    /// than taking the English figure sitting next to it.
     /// </summary>
     private const string SelectItems = """
         SELECT c.id, c.card_id, c.quantity, c.variant, c.condition, c.grade,
@@ -26,7 +30,7 @@ public sealed class CollectionService(Db db, SettingsService settings, IEnumerab
                  WHERE p.card_id = c.card_id AND p.variant = c.variant
                    AND p.currency = $currency AND p.market IS NOT NULL
                  ORDER BY p.captured_on DESC LIMIT 1),
-               c.import_batch
+               c.import_batch, c.language
         FROM collection c
         JOIN cards k ON k.id = c.card_id
         """;
@@ -63,10 +67,10 @@ public sealed class CollectionService(Db db, SettingsService settings, IEnumerab
         cmd.CommandText = """
             INSERT INTO collection (card_id, quantity, variant, condition, grade,
                                     purchase_price, purchase_date, notes, manual_value,
-                                    location, added_at, import_batch)
+                                    location, language, added_at, import_batch)
             VALUES ($cardId, $quantity, $variant, $condition, $grade,
                     $purchasePrice, $purchaseDate, $notes, $manualValue,
-                    $location, $addedAt, $importBatch);
+                    $location, $language, $addedAt, $importBatch);
             SELECT last_insert_rowid();
             """;
         cmd.Parameters.AddWithValue("$importBatch", (object?)importBatch ?? DBNull.Value);
@@ -80,6 +84,7 @@ public sealed class CollectionService(Db db, SettingsService settings, IEnumerab
         cmd.Parameters.AddWithValue("$notes", (object?)req.Notes ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$manualValue", (object?)req.ManualValue ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$location", (object?)req.Location ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$language", Languages.Normalize(req.Language));
         cmd.Parameters.AddWithValue("$addedAt", DateTime.UtcNow.ToString("o"));
         return (long)(cmd.ExecuteScalar() ?? 0L);
     }
@@ -104,6 +109,14 @@ public sealed class CollectionService(Db db, SettingsService settings, IEnumerab
         Set("grade", "grade", req.Grade);
         Set("purchase_date", "purchaseDate", req.PurchaseDate);
         Set("notes", "notes", req.Notes);
+
+        // Normalised on the way in so the stored value is always a code we know:
+        // the column is only useful if "Japanese", "JP" and "ja" are one thing.
+        if (req.Language is not null)
+        {
+            sets.Add("language = $language");
+            pars["$language"] = Languages.Normalize(req.Language);
+        }
 
         // An empty string clears the location; null still means "leave alone".
         if (req.Location is not null)
@@ -222,6 +235,11 @@ public sealed class CollectionService(Db db, SettingsService settings, IEnumerab
     /// the valuation currency first, then to one source, preferring the chosen market
     /// and falling back to whatever else priced that card so a sealed box still
     /// counts on days only eBay saw it.
+    ///
+    /// Only copies the grid prices count, which is the same rule it applies: the
+    /// catalogue snapshots are English prices, so a Japanese single is left out, while
+    /// a hand-entered item keeps the eBay figure found under its own name. Counting a
+    /// copy here that the total below never shows would make the chart disagree with it.
     /// </summary>
     public List<ValuePoint> ValueHistory()
     {
@@ -239,11 +257,13 @@ public sealed class CollectionService(Db db, SettingsService settings, IEnumerab
                 WHERE market IS NOT NULL AND currency = $currency
             ) p
             JOIN collection c ON c.card_id = p.card_id AND c.variant = p.variant
-            WHERE p.rn = 1
+            JOIN cards k ON k.id = c.card_id
+            WHERE p.rn = 1 AND (c.language = $language OR k.is_custom = 1)
             GROUP BY p.captured_on
             ORDER BY p.captured_on
             """;
         cmd.Parameters.AddWithValue("$source", settings.PreferredPriceSource);
+        cmd.Parameters.AddWithValue("$language", Languages.Default);
         cmd.Parameters.AddWithValue("$currency", PreferredCurrency());
         var points = new List<ValuePoint>();
         using var r = cmd.ExecuteReader();
@@ -272,6 +292,20 @@ public sealed class CollectionService(Db db, SettingsService settings, IEnumerab
         // sealed box or a slab there is no payload price at all, so the recorded one
         // — eBay, in practice — is the only market number that exists for it.
         var marketPrice = price.Market ?? trackedMarket;
+
+        // Every catalogue price is for the English printing, so a copy in any other
+        // language gets none of them. Showing the English figure against a Japanese
+        // card would be a number from the wrong market presented as this card's
+        // worth, which is worse than admitting we don't know: set a manual value and
+        // it counts normally, leave it and the card is simply unpriced.
+        //
+        // Hand-entered items are the exception, and not a grudging one: the only
+        // source that prices them searches eBay for the name you typed, so a listing
+        // called "Japanese Base Set Charizard" is already priced as the Japanese
+        // thing it is. That figure is about this copy, so it stands.
+        var language = r.IsDBNull(29) ? Languages.Default : r.GetString(29);
+        var priced = isCustom || Languages.IsPriced(language);
+        if (!priced) marketPrice = null;
 
         // Your own number still wins. A slabbed PSA 10 and a sealed booster box both
         // have a worth that a keyword search of live listings can only approximate.
@@ -302,13 +336,15 @@ public sealed class CollectionService(Db db, SettingsService settings, IEnumerab
             Notes: r.IsDBNull(8) ? null : r.GetString(8),
             AddedAt: r.GetString(9),
             MarketPrice: marketPrice,
-            LowPrice: price.Low,
-            HighPrice: price.High,
+            LowPrice: priced ? price.Low : null,
+            HighPrice: priced ? price.High : null,
             LineValue: unitValue is { } v ? Math.Round(v * quantity, 2) : null,
             PricesUpdatedAt: Pricing.TcgUpdatedAt(card),
             ManualValue: manualValue,
             IsCustom: isCustom,
             Location: r.IsDBNull(26) ? null : r.GetString(26),
+            Language: language,
+            Priced: priced,
             ImportBatch: r.IsDBNull(28) ? null : r.GetString(28));
     }
 }

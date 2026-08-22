@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api, cardImage, money } from '../api'
-import { rarityClass } from '../lib/cardStyles'
+import { languageName, languageTag, rarityClass } from '../lib/cardStyles'
 import type { CollectionItem, ImportBatchSummary } from '../types'
 import { ImportsView } from './ImportsView'
 import { CardDetail } from './CardDetail'
@@ -42,6 +42,7 @@ export function CollectionView({
   // rather than eating another slot in the top nav.
   const [pane, setPane] = useState<'owned' | 'imports' | 'wanted' | 'sold'>('owned')
   const [locationFilter, setLocationFilter] = useState('')
+  const [languageFilter, setLanguageFilter] = useState('')
   const [batchFilter, setBatchFilter] = useState('')
   const [batches, setBatches] = useState<ImportBatchSummary[]>([])
 
@@ -111,6 +112,13 @@ export function CollectionView({
     [items],
   )
 
+  // Offered only once you own something that isn't English: for an all-English
+  // collection the control would filter nothing and just take up room.
+  const languages = useMemo(
+    () => [...new Set(items.map((i) => i.language))].sort(),
+    [items],
+  )
+
   const visible = useMemo(() => {
     const term = filter.trim().toLowerCase()
     let out = items
@@ -130,6 +138,7 @@ export function CollectionView({
     else if (kind === 'hand') out = out.filter((i) => i.isCustom)
 
     if (setFilter_) out = out.filter((i) => i.setId === setFilter_)
+    if (languageFilter) out = out.filter((i) => i.language === languageFilter)
     if (batchFilter) out = out.filter((i) => i.importBatch === batchFilter)
     if (locationFilter) {
       out =
@@ -155,7 +164,7 @@ export function CollectionView({
       }
     })
     return sorted
-  }, [items, filter, setFilter_, locationFilter, batchFilter, sort, kind])
+  }, [items, filter, setFilter_, languageFilter, locationFilter, batchFilter, sort, kind])
 
   const ownedForDetail = detailCardId ? items.filter((i) => i.cardId === detailCardId) : []
   const visibleValue = visible.reduce((sum, i) => sum + (i.lineValue ?? 0), 0)
@@ -386,6 +395,21 @@ export function CollectionView({
           </select>
         )}
 
+        {languages.length > 1 && (
+          <select
+            value={languageFilter}
+            onChange={(e) => setLanguageFilter(e.target.value)}
+            className={control}
+          >
+            <option value="">Any language</option>
+            {languages.map((l) => (
+              <option key={l} value={l}>
+                {languageName(l)}
+              </option>
+            ))}
+          </select>
+        )}
+
         {batches.length > 0 && (
           <select
             value={batchFilter}
@@ -491,6 +515,11 @@ export function CollectionView({
                 <div className="truncate">
                   {item.condition}
                   {item.grade ? ` · ${item.grade}` : ''}
+                  {languageTag(item.language) && (
+                    <span className="ml-1 rounded bg-white/15 px-1 text-[10px] tracking-wide">
+                      {languageTag(item.language)}
+                    </span>
+                  )}
                 </div>
                 {item.location && <div className="truncate text-white/70">📍 {item.location}</div>}
               </div>
