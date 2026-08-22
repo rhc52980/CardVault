@@ -46,6 +46,10 @@ export function CollectionView({
   const [gradedFilter, setGradedFilter] = useState('')
   const [batchFilter, setBatchFilter] = useState('')
   const [batches, setBatches] = useState<ImportBatchSummary[]>([])
+  // Only ever read for the count on the tab. A card reaching your price is the one
+  // thing on that list worth interrupting you for, and it's no use only being
+  // visible once you've already gone looking for it.
+  const [wantsAtPrice, setWantsAtPrice] = useState(0)
 
   // Reloaded whenever the collection is, which covers an import having just added
   // cards without needing to be told about it separately.
@@ -54,6 +58,9 @@ export function CollectionView({
     api.importBatches()
       .then((b) => live && setBatches(b))
       .catch(() => live && setBatches([]))
+    api.wants()
+      .then((w) => live && setWantsAtPrice(w.filter((x) => x.atOrBelowTarget).length))
+      .catch(() => live && setWantsAtPrice(0))
     return () => {
       live = false
     }
@@ -191,7 +198,7 @@ export function CollectionView({
           [
             ['owned', 'Owned'],
             ['imports', unreviewed.length ? `Imports (${unreviewed.length})` : 'Imports'],
-            ['wanted', 'Wanted'],
+            ['wanted', wantsAtPrice ? `Wanted (${wantsAtPrice})` : 'Wanted'],
             ['sold', 'Sold'],
           ] as const
         ).map(([key, text]) => (

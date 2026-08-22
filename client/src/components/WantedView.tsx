@@ -8,6 +8,19 @@ import { Modal } from './Modal'
 const control =
   'rounded-md border border-edge bg-abyss px-2 py-1 text-xs text-bright outline-none focus:border-arc focus:ring-1 focus:ring-arc'
 
+/**
+ * How long a card has been at your price. Worth saying because a drop this morning
+ * and one that has sat there a fortnight are different situations: the first is news,
+ * the second is a price you've already decided not to pay.
+ */
+function sinceLabel(iso: string) {
+  const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000)
+  if (days <= 0) return 'today'
+  if (days === 1) return 'since yesterday'
+  if (days < 30) return `for ${days} days`
+  return `since ${new Date(iso).toLocaleDateString()}`
+}
+
 export function WantedView({
   onChanged,
   onGoToSearch,
@@ -181,6 +194,7 @@ function WantRow({
         {want.atOrBelowTarget && (
           <div className="mt-1 text-xs font-medium text-mint">
             At your price — {money(Math.abs(want.differenceToTarget ?? 0))} under target
+            {want.metSince && <span className="text-mint/70"> · {sinceLabel(want.metSince)}</span>}
           </div>
         )}
 

@@ -292,7 +292,13 @@ public sealed record WantItem(
     /// <summary>Market minus target — negative means it's going for less than you'd pay.</summary>
     double? DifferenceToTarget,
     /// <summary>True when the market has come down to your price.</summary>
-    bool AtOrBelowTarget);
+    bool AtOrBelowTarget,
+    /// <summary>
+    /// When it first came down and stayed there, or null if it hasn't. A drop this
+    /// morning and one that has sat for a month are different situations, and this is
+    /// what tells them apart. Reset whenever the price goes back above.
+    /// </summary>
+    string? MetSince = null);
 
 public sealed record PricePoint(string Date, double Market, double? Low, double? High);
 
