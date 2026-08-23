@@ -70,8 +70,16 @@ decisions.
 Nothing records which file an import came from, so each batch is matched to its file
 by aligning the two in order — entries are created in the order rows were committed and
 the CSVs are sorted by file name, so rows that never imported show up as gaps rather
-than throwing everything after them out of step. Files matching no import are reported
-rather than ignored, as are rows that were scanned but never made it into the vault.
+than throwing everything after them out of step.
+
+**Cards you scanned that never reached the vault** are listed too, and can be
+downloaded as a CSV in the importer's own columns — import it and they're added. These
+are the rows whose import failed to resolve at the time, plus every row of any file
+that matched no import at all. Each carries the scan it came from, so a row you can't
+place is still traceable to the image of the actual card.
+
+Between them, every scanned row is accounted for: it agreed, it disagreed, or it isn't
+there.
 
 ## Photos of your own cards
 

@@ -44,6 +44,7 @@ public sealed class ReconcileService(Db db, ILogger<ReconcileService> log)
         var batches = LoadBatches();
         var results = new List<BatchReconcile>();
         var flags = new Dictionary<long, string>();
+        var missing = new List<MissingScan>();
 
         // Longest batch first. A big batch pins down its CSV more reliably than a
         // short one, which might align passably against several.
@@ -80,10 +81,20 @@ public sealed class ReconcileService(Db db, ILogger<ReconcileService> log)
             }
 
             // Rows that matched nothing and weren't offered as an explanation for a
-            // disagreeing entry either: scanned, but never in the vault at all.
-            // Counted from the rows actually consumed, because a batch can hold more
-            // entries than the file has rows and subtracting blind goes negative.
-            var explained = disagreements.Count(d => d.Row is not null);
+            // disagreeing entry either: scanned, but never in the vault at all. Those
+            // are cards you physically have and can't see, so they're collected rather
+            // than counted — the point is to hand them back as something importable.
+            var consumed = anchors.Select(a => a.Row)
+                .Concat(disagreements.Where(d => d.RowIndex >= 0).Select(d => d.RowIndex))
+                .ToHashSet();
+
+            var leftover = best.Rows
+                .Select((row, index) => (row, index))
+                .Where(x => !consumed.Contains(x.index))
+                .Select(x => new MissingScan(best.Name, x.row.File, x.row.Name, x.row.SetName, x.row.Number))
+                .ToList();
+
+            missing.AddRange(leftover);
 
             results.Add(new BatchReconcile(
                 BatchId: batchId,
@@ -91,18 +102,26 @@ public sealed class ReconcileService(Db db, ILogger<ReconcileService> log)
                 Entries: entries.Count,
                 Agreed: anchors.Count,
                 Disagreed: disagreements.Count,
-                NeverImported: Math.Max(0, best.Rows.Count - anchors.Count - explained)));
+                NeverImported: leftover.Count));
         }
 
         if (apply) ApplyFlags(flags);
+
+        // A file that matched no batch at all is the same story writ large: every row
+        // in it was scanned and none of it reached the vault. Left out, the one thing
+        // most likely to be entirely missing would be the thing not reported.
+        var unmatchedFiles = scans.Keys.Where(k => !claimed.Contains(k)).Order().ToList();
+        foreach (var file in unmatchedFiles)
+            missing.AddRange(scans[file].Select(r => new MissingScan(file, r.File, r.Name, r.SetName, r.Number)));
 
         return new ReconcileReport(
             Applied: apply,
             Batches: results.OrderBy(r => r.ScanFile ?? "~").ToList(),
             Agreed: results.Sum(r => r.Agreed),
             Disagreed: results.Sum(r => r.Disagreed),
-            NeverImported: results.Sum(r => r.NeverImported),
-            UnmatchedFiles: scans.Keys.Where(k => !claimed.Contains(k)).Order().ToList());
+            NeverImported: missing.Count,
+            UnmatchedFiles: unmatchedFiles,
+            Missing: missing.OrderBy(m => m.ScanFile).ThenBy(m => m.File).ToList());
     }
 
     /// <summary>Clears every flag. Nothing else about an entry is touched.</summary>
@@ -161,10 +180,10 @@ public sealed class ReconcileService(Db db, ILogger<ReconcileService> log)
     /// them: the leftovers between the same two anchors, in order. Beyond those bounds
     /// there's nothing to pair with, so the entry is reported on its own.
     /// </summary>
-    private static List<(Entry Entry, ScanRow? Row)> Pair(
+    private static List<(Entry Entry, ScanRow? Row, int RowIndex)> Pair(
         List<Entry> entries, List<ScanRow> rows, List<(int Entry, int Row)> anchors)
     {
-        var paired = new List<(Entry, ScanRow?)>();
+        var paired = new List<(Entry, ScanRow?, int)>();
         var bounds = anchors.Append((Entry: entries.Count, Row: rows.Count)).ToList();
 
         int e = 0, r = 0;
@@ -174,7 +193,10 @@ public sealed class ReconcileService(Db db, ILogger<ReconcileService> log)
             var spareRows = Enumerable.Range(r, anchorRow - r).ToList();
 
             for (var k = 0; k < spareEntries.Count; k++)
-                paired.Add((entries[spareEntries[k]], k < spareRows.Count ? rows[spareRows[k]] : null));
+            {
+                var index = k < spareRows.Count ? spareRows[k] : -1;
+                paired.Add((entries[spareEntries[k]], index >= 0 ? rows[index] : null, index));
+            }
 
             e = anchorEntry + 1;
             r = anchorRow + 1;

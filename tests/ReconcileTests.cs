@@ -179,6 +179,73 @@ public sealed class ReconcileTests : IDisposable
         Assert.Equal("Batch_2.csv", Assert.Single(report.UnmatchedFiles));
     }
 
+    // -------------------------------------------------------- scanned but missing
+
+    /// <summary>
+    /// A row that never imported is a card you physically own and cannot see. Counting
+    /// it is no use; the point is to hand it back in a shape the importer will take.
+    /// </summary>
+    [Fact]
+    public void A_row_that_never_imported_is_returned_not_just_counted()
+    {
+        Import("job1", ("Pikachu", "Base", "58"));
+        var csv = Header
+                  + "a.png,Pikachu,Base,058/102\n"
+                  + "b.png,Snorlax,Jungle,011/064\n";
+
+        var report = Run("Batch_1.csv", csv);
+
+        var missing = Assert.Single(report.Missing);
+        Assert.Equal("Snorlax", missing.Name);
+        Assert.Equal("Jungle", missing.SetName);
+        Assert.Equal("011/064", missing.Number);
+        Assert.Equal("b.png", missing.File);
+        Assert.Equal("Batch_1.csv", missing.ScanFile);
+    }
+
+    /// <summary>
+    /// A whole file that matched nothing is the case most likely to be entirely
+    /// missing, so leaving its rows out would omit exactly what matters most.
+    /// </summary>
+    [Fact]
+    public void Every_row_of_an_unmatched_file_counts_as_missing()
+    {
+        Import("job1", ("Pikachu", "Base", "58"));
+        var report = _reconcile.Run(new Dictionary<string, string>
+        {
+            ["Batch_1.csv"] = Header + "a.png,Pikachu,Base,058/102\n",
+            ["Batch_2.csv"] = Header + "b.png,Snorlax,Jungle,011/064\nc.png,Gyarados,Base,006/102\n",
+        }, apply: false);
+
+        Assert.Equal(2, report.Missing.Count);
+        Assert.All(report.Missing, m => Assert.Equal("Batch_2.csv", m.ScanFile));
+        Assert.Equal(2, report.NeverImported);
+    }
+
+    /// <summary>
+    /// A row offered as the explanation for a disagreeing entry has been accounted
+    /// for. Reporting it as missing too would have you import a card you already own.
+    /// </summary>
+    [Fact]
+    public void A_row_explaining_a_disagreement_is_not_also_missing()
+    {
+        Import("job1", ("Greedent", "Chilling Reign", "128"));
+        var report = Run("Batch_1.csv", Header + "a.png,Greedent,Darkness Ablaze,153/189\n");
+
+        Assert.Equal(1, report.Disagreed);
+        Assert.Empty(report.Missing);
+        Assert.Equal(0, report.NeverImported);
+    }
+
+    [Fact]
+    public void A_file_that_agrees_completely_reports_nothing_missing()
+    {
+        Import("job1", ("Pikachu", "Base", "58"));
+        var report = Run("Batch_1.csv", Header + "a.png,Pikachu,Base,058/102\n");
+
+        Assert.Empty(report.Missing);
+    }
+
     // ------------------------------------------------------------------ dismissing
 
     [Fact]

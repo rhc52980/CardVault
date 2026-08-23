@@ -293,6 +293,19 @@ public sealed record BatchReconcile(
     /// <summary>Rows in the file with no entry at all — scanned but never imported.</summary>
     int NeverImported);
 
+/// <summary>
+/// A card that was scanned but never reached the vault — either its import row failed
+/// to resolve, or the whole file was never imported. Carries what the scan read, which
+/// is enough to feed straight back into the importer.
+/// </summary>
+public sealed record MissingScan(
+    string ScanFile,
+    /// <summary>The image this row came from, so you can go and look at the card.</summary>
+    string File,
+    string? Name,
+    string? SetName,
+    string? Number);
+
 public sealed record ReconcileReport(
     /// <summary>False for a dry run, which reports without writing a single flag.</summary>
     bool Applied,
@@ -301,7 +314,12 @@ public sealed record ReconcileReport(
     int Disagreed,
     int NeverImported,
     /// <summary>Files that matched no batch — most likely never imported at all.</summary>
-    IReadOnlyList<string> UnmatchedFiles);
+    IReadOnlyList<string> UnmatchedFiles,
+    /// <summary>
+    /// Every scanned card with nothing to show for it in the vault. Returned in full
+    /// rather than counted, because the useful thing to do with them is import them.
+    /// </summary>
+    IReadOnlyList<MissingScan> Missing);
 
 public sealed record PasswordRequest(string? Password);
 
