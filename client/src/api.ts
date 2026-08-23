@@ -14,6 +14,8 @@ import type {
   CustomItemRequest,
   Deck,
   DeckSummary,
+  FriendMatches,
+  FriendVaultSummary,
   FullCard,
   ImportBatchSummary,
   ImportJob,
@@ -21,6 +23,7 @@ import type {
   ReconcileReport,
   SaleRecord,
   SearchCard,
+  SharedCard,
   SellRequest,
   SessionInfo,
   SetCard,
@@ -157,6 +160,35 @@ export const api = {
   async dismissFlag(entryId: number) {
     const res = await fetch(`/api/collection/${entryId}/flag`, { method: 'DELETE' })
     if (!res.ok) throw new Error('Could not dismiss that flag')
+  },
+
+  friends() {
+    return fetch('/api/friends').then(json<FriendVaultSummary[]>)
+  },
+
+  friendMatches(id: number) {
+    return fetch(`/api/friends/${id}`).then(json<FriendMatches>)
+  },
+
+  friendCards(id: number, kind: 'own' | 'want') {
+    return fetch(`/api/friends/${id}/cards?kind=${kind}`).then(json<SharedCard[]>)
+  },
+
+  async importFriend(file: File, name: string) {
+    const body = new FormData()
+    body.append('vault', file)
+    if (name.trim()) body.append('name', name.trim())
+    const res = await fetch('/api/friends', { method: 'POST', body })
+    if (!res.ok) {
+      const detail = await res.json().catch(() => null)
+      throw new Error(detail?.error ?? 'Could not read that vault')
+    }
+    return (await res.json()) as { id: number }
+  },
+
+  async removeFriend(id: number) {
+    const res = await fetch(`/api/friends/${id}`, { method: 'DELETE' })
+    if (!res.ok) throw new Error('Could not remove that vault')
   },
 
   decks() {

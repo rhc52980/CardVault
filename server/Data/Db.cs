@@ -188,6 +188,43 @@ public sealed class Db
                 PRIMARY KEY (deck_id, card_id)
             );
 
+            -- A friend's collection, imported from a file they sent you.
+            --
+            -- Kept in its own tables and never merged into yours. Their cards must not
+            -- reach your valuation, your set completion or your decks, and "remove it"
+            -- has to mean exactly that -- both of which are free if the two were never
+            -- mixed in the first place.
+            CREATE TABLE IF NOT EXISTS friend_vaults (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                name        TEXT NOT NULL,
+                note        TEXT,
+                -- When they exported it, as claimed by the file. Worth showing: a
+                -- list from March is a different thing to trade against than today's.
+                exported_at TEXT,
+                imported_at TEXT NOT NULL
+            );
+
+            -- Card details are copied in rather than joined against your catalogue: a
+            -- friend can own cards you've never seen, and a shared list has to survive
+            -- being read by someone whose vault has never heard of them.
+            CREATE TABLE IF NOT EXISTS friend_cards (
+                vault_id  INTEGER NOT NULL REFERENCES friend_vaults(id),
+                -- 'own' or 'want'. Both matter: theirs against your wants is what you
+                -- could ask for, yours against their wants is what you could offer.
+                kind      TEXT NOT NULL,
+                card_id   TEXT NOT NULL,
+                name      TEXT NOT NULL,
+                set_name  TEXT,
+                number    TEXT,
+                rarity    TEXT,
+                condition TEXT,
+                language  TEXT,
+                quantity  INTEGER NOT NULL DEFAULT 1
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_friend_cards_vault ON friend_cards(vault_id);
+            CREATE INDEX IF NOT EXISTS idx_friend_cards_card ON friend_cards(card_id);
+
             CREATE TABLE IF NOT EXISTS sessions (
                 token       TEXT PRIMARY KEY,
                 created_at  TEXT NOT NULL,
