@@ -53,6 +53,26 @@ Locations come through CSV import too — the column can be called `Location`,
 `Storage`, `Binder`, `Box`, `Where`, `Stored` or `Placement` — and are included
 in the CSV export.
 
+## Checking the vault against your scans
+
+If your collection came in by scanning cards and importing the result, the scans keep
+improving after the import — OCR gets corrected, a set symbol finally gets identified —
+while the vault stays as it was. **My vault → Imports → Check against your scans** takes
+the `Batch_N_cards.csv` files and says where the two have drifted apart.
+
+**It corrects nothing.** Disagreements are marked, and the cards keep exactly the
+identity they were imported with. A **Needs review** filter appears in the vault
+toolbar, flagged cards carry a badge, and each one shows what the scans now read
+against what the vault holds. Fix it yourself if the scan is right, dismiss it if the
+vault is. Comparing is one button and marking is another, because those are different
+decisions.
+
+Nothing records which file an import came from, so each batch is matched to its file
+by aligning the two in order — entries are created in the order rows were committed and
+the CSVs are sorted by file name, so rows that never imported show up as gaps rather
+than throwing everything after them out of step. Files matching no import are reported
+rather than ignored, as are rows that were scanned but never made it into the vault.
+
 ## Photos of your own cards
 
 Off by default. Turn it on in **Settings → Photos of your own cards**, then open any

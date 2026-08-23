@@ -109,6 +109,12 @@ public sealed record CollectionItem(
     /// </summary>
     bool HasPhoto,
     /// <summary>
+    /// What a later read of the scans says this card should have been, when that
+    /// disagrees with what was imported. A note only — the entry still holds the card
+    /// it was imported as, and changing it is your call.
+    /// </summary>
+    string? Flagged,
+    /// <summary>
     /// False when the prices we hold don't describe this copy — a slab, or a printing
     /// in a language none of our sources cover. Such a copy is worth whatever
     /// <see cref="ManualValue"/> says and nothing otherwise, and the UI says so
@@ -273,6 +279,29 @@ public sealed record ToggleRequest(bool Enabled);
 /// quietly growing to several gigabytes is the sort of thing worth being told about.
 /// </summary>
 public sealed record PhotoStatus(bool Enabled, int Count, long Bytes);
+
+/// <summary>How one import batch compares against the scan file it came from.</summary>
+public sealed record BatchReconcile(
+    string BatchId,
+    /// <summary>The scan CSV this batch was matched to, or null if none fitted.</summary>
+    string? ScanFile,
+    int Entries,
+    /// <summary>Entries the scans still agree with.</summary>
+    int Agreed,
+    /// <summary>Entries the scans now read differently. Flagged, never changed.</summary>
+    int Disagreed,
+    /// <summary>Rows in the file with no entry at all — scanned but never imported.</summary>
+    int NeverImported);
+
+public sealed record ReconcileReport(
+    /// <summary>False for a dry run, which reports without writing a single flag.</summary>
+    bool Applied,
+    IReadOnlyList<BatchReconcile> Batches,
+    int Agreed,
+    int Disagreed,
+    int NeverImported,
+    /// <summary>Files that matched no batch — most likely never imported at all.</summary>
+    IReadOnlyList<string> UnmatchedFiles);
 
 public sealed record PasswordRequest(string? Password);
 

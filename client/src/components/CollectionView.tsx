@@ -52,6 +52,7 @@ export function CollectionView({
   const [locationFilter, setLocationFilter] = useState('')
   const [languageFilter, setLanguageFilter] = useState('')
   const [gradedFilter, setGradedFilter] = useState('')
+  const [flaggedOnly, setFlaggedOnly] = useState(false)
   const [batchFilter, setBatchFilter] = useState('')
   const [batches, setBatches] = useState<ImportBatchSummary[]>([])
   // Only ever read for the count on the tab. A card reaching your price is the one
@@ -162,6 +163,7 @@ export function CollectionView({
     if (languageFilter) out = out.filter((i) => i.language === languageFilter)
     if (gradedFilter === 'graded') out = out.filter((i) => !!i.grade)
     else if (gradedFilter === 'raw') out = out.filter((i) => !i.grade)
+    if (flaggedOnly) out = out.filter((i) => !!i.flagged)
     if (batchFilter) out = out.filter((i) => i.importBatch === batchFilter)
     if (locationFilter) {
       out =
@@ -187,7 +189,11 @@ export function CollectionView({
       }
     })
     return sorted
-  }, [items, filter, setFilter_, languageFilter, gradedFilter, locationFilter, batchFilter, sort, kind])
+  }, [items, filter, setFilter_, languageFilter, gradedFilter, flaggedOnly, locationFilter, batchFilter, sort, kind])
+
+  // Entries a scan comparison disagreed with. Counted over everything you own, not
+  // the current view, so narrowing a filter can't make the number look better.
+  const flaggedCount = useMemo(() => items.filter((i) => i.flagged).length, [items])
 
   const ownedForDetail = detailCardId ? items.filter((i) => i.cardId === detailCardId) : []
 
@@ -473,6 +479,20 @@ export function CollectionView({
           </select>
         )}
 
+        {flaggedCount > 0 && (
+          <button
+            onClick={() => setFlaggedOnly((v) => !v)}
+            className={`rounded-lg border px-3 py-2 text-sm transition ${
+              flaggedOnly
+                ? 'border-gold bg-gold/15 text-gold'
+                : 'border-edge text-mute hover:border-gold/60 hover:text-gold'
+            }`}
+            title="Entries a scan comparison read differently. Nothing has been changed."
+          >
+            Needs review ({flaggedCount.toLocaleString()})
+          </button>
+        )}
+
         {items.some((i) => i.grade) && (
           <select
             value={gradedFilter}
@@ -588,6 +608,14 @@ export function CollectionView({
                 {item.isCustom && (
                   <span className="rounded-full bg-gold/90 px-2 py-0.5 text-[11px] font-semibold text-black shadow">
                     By hand
+                  </span>
+                )}
+                {item.flagged && (
+                  <span
+                    className="rounded-full bg-gold/90 px-2 py-0.5 text-[11px] font-semibold text-black shadow"
+                    title={item.flagged}
+                  >
+                    ⚑ Review
                   </span>
                 )}
               </div>

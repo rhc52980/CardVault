@@ -69,6 +69,11 @@ export interface CollectionItem {
   /** True when you've attached your own photograph of this copy. */
   hasPhoto: boolean
   /**
+   * What a later read of the scans says this card should have been, when that
+   * disagrees with what was imported. A note only — the card itself is untouched.
+   */
+  flagged?: string | null
+  /**
    * False when our prices don't describe this copy — a slab, or a printing in a
    * language none of our sources cover. Such a card is worth its manual value or
    * nothing, and the UI says so rather than showing a figure from the wrong market.
@@ -103,6 +108,26 @@ export interface WantItem {
    * morning and one that has sat for a month are different situations.
    */
   metSince?: string | null
+}
+
+/** How one import batch compares against the scan file it came from. */
+export interface BatchReconcile {
+  batchId: string
+  scanFile?: string | null
+  entries: number
+  agreed: number
+  disagreed: number
+  neverImported: number
+}
+
+export interface ReconcileReport {
+  /** False for a dry run, which reports without writing a single flag. */
+  applied: boolean
+  batches: BatchReconcile[]
+  agreed: number
+  disagreed: number
+  neverImported: number
+  unmatchedFiles: string[]
 }
 
 /** Whether your own card photos are switched on, and what they cost in disk. */

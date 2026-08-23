@@ -92,6 +92,10 @@ builder.Services.AddSingleton<WantsService>();
 // Your own photographs of your own cards, as opposed to catalogue artwork. Off
 // until switched on, so an unused feature leaves no folder behind.
 builder.Services.AddSingleton<PhotoService>();
+
+// Compares the vault against a fresher read of the scans it came from. Writes notes,
+// never corrections -- see ReconcileService for why that line matters.
+builder.Services.AddSingleton<ReconcileService>();
 builder.Services.AddSingleton<AuthService>();
 builder.Services.AddHttpClient();
 builder.Services.AddSingleton(sp => new UpdateChecker(
@@ -388,6 +392,38 @@ app.MapDelete("/api/collection/{id:long}", (
     photos.CleanUpOrphans();
     return Results.NoContent();
 });
+
+// ------------------------------------------------ checking the vault against scans
+
+/// Compares the vault against a fresher read of the scans it came from.
+///
+/// Defaults to a dry run. Nothing is written unless you ask for it, and even then the
+/// only write is a note on the entry -- no card, quantity, price or set is touched.
+app.MapPost("/api/reconcile", async (
+    HttpRequest request, ReconcileService reconcile, CancellationToken ct) =>
+{
+    if (!request.HasFormContentType)
+        return Results.BadRequest(new { error = "Send the scan CSVs as file uploads." });
+
+    var form = await request.ReadFormAsync(ct);
+    if (form.Files.Count == 0) return Results.BadRequest(new { error = "No files came through." });
+
+    var files = new Dictionary<string, string>();
+    foreach (var file in form.Files)
+    {
+        using var reader = new StreamReader(file.OpenReadStream());
+        files[file.FileName] = await reader.ReadToEndAsync(ct);
+    }
+
+    var apply = form.TryGetValue("apply", out var a) && a.ToString() is "true" or "1";
+    return Results.Ok(reconcile.Run(files, apply));
+});
+
+app.MapDelete("/api/reconcile/flags", (ReconcileService reconcile)
+    => Results.Ok(new { cleared = reconcile.ClearAll() }));
+
+app.MapDelete("/api/collection/{id:long}/flag", (long id, ReconcileService reconcile)
+    => reconcile.Dismiss(id) ? Results.NoContent() : Results.NotFound());
 
 // -------------------------------------------------------------- your own photos
 
