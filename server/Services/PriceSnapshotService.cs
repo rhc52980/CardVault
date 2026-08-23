@@ -371,7 +371,11 @@ public sealed class PriceSnapshotService(
             .Select(kv => new PriceSeries(
                 Variant: kv.Key.Variant,
                 Source: kv.Key.Source,
-                SourceName: sources.FirstOrDefault(s => s.Id == kv.Key.Source)?.DisplayName ?? kv.Key.Source,
+                // Your own valuations aren't a registered source — nothing fetches
+                // them — so they'd otherwise be labelled with the raw column value.
+                SourceName: kv.Key.Source == Valuations.Source
+                    ? Valuations.SourceName
+                    : sources.FirstOrDefault(s => s.Id == kv.Key.Source)?.DisplayName ?? kv.Key.Source,
                 Currency: kv.Value.Currency,
                 Points: kv.Value.Points))
             .OrderBy(s => s.Source)
