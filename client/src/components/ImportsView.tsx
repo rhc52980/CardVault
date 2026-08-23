@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { api } from '../api'
-import type { ImportBatchSummary, ReconcileReport } from '../types'
+import type { ImportBatchSummary, MissingScan, ReconcileReport } from '../types'
 import { ConfirmButton } from './ConfirmButton'
 
 /**
@@ -157,6 +157,40 @@ export function ImportsView({
  * Dry by default, and the button that writes says so, because "compare" and "write to
  * every entry in my collection" should not be the same click.
  */
+/**
+ * The scanned-but-missing rows, written in the columns the importer already reads.
+ *
+ * Built here rather than served, because the report is the only place these exist —
+ * nothing about them is stored, so there is nothing for an endpoint to fetch. It is
+ * the same trick the import review uses for its leftovers.
+ */
+function downloadMissing(missing: MissingScan[]) {
+  const cell = (v: string | null | undefined) => {
+    const t = v ?? ''
+    return /[",\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t
+  }
+
+  const lines = ['Name,Set,Number,Quantity,Notes']
+  for (const m of missing) {
+    lines.push([
+      cell(m.name),
+      cell(m.setName),
+      cell(m.number),
+      '1',
+      // Which scan it came from, so a row you can't place is still traceable to
+      // the image of the actual card.
+      cell(`${m.scanFile} · ${m.file}`),
+    ].join(','))
+  }
+
+  const url = URL.createObjectURL(new Blob([lines.join('\n')], { type: 'text/csv' }))
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'scanned-but-not-in-vault.csv'
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
 function ReconcileCard({ onChanged }: { onChanged: () => Promise<void> | void }) {
   const input = useRef<HTMLInputElement>(null)
   const [files, setFiles] = useState<File[]>([])
@@ -249,6 +283,19 @@ function ReconcileCard({ onChanged }: { onChanged: () => Promise<void> | void })
             <span className="text-mute">
               {report.neverImported.toLocaleString()} scanned rows never imported
             </span>
+            {report.missing.length > 0 && (
+              <div className="mt-1.5">
+                <button
+                  onClick={() => downloadMissing(report.missing)}
+                  className="text-xs text-arc transition hover:underline"
+                >
+                  Download those {report.missing.length.toLocaleString()} as a CSV
+                </button>
+                <span className="ml-2 text-[11px] text-mute">
+                  — cards you scanned that aren't in the vault. Import it to add them.
+                </span>
+              </div>
+            )}
             {report.unmatchedFiles.length > 0 && (
               <div className="mt-1 text-xs text-mute">
                 {report.unmatchedFiles.length} file(s) matched no import:{' '}
