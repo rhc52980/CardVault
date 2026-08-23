@@ -164,6 +164,30 @@ public sealed class Db
             -- Signed-in sessions. Kept server-side rather than in a self-contained
             -- cookie so signing out actually revokes access everywhere, including
             -- from a device you no longer have.
+            -- Decks you're building, which is a different question from what you own:
+            -- a deck can call for cards you haven't got, and that gap is the point of
+            -- keeping one here rather than in a spreadsheet.
+            CREATE TABLE IF NOT EXISTS decks (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                name       TEXT NOT NULL,
+                -- standard, expanded or unlimited. Drives the legality check and
+                -- whether deck rules are applied at all.
+                format     TEXT NOT NULL DEFAULT 'standard',
+                notes      TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT
+            );
+
+            -- A deck's list, by card rather than by the copy you own. Deliberately not
+            -- pointing at collection rows: a deck is what you intend to play, and it
+            -- has to survive selling a copy, buying a better one, or not owning it yet.
+            CREATE TABLE IF NOT EXISTS deck_cards (
+                deck_id  INTEGER NOT NULL REFERENCES decks(id) ON DELETE CASCADE,
+                card_id  TEXT NOT NULL REFERENCES cards(id),
+                quantity INTEGER NOT NULL DEFAULT 1,
+                PRIMARY KEY (deck_id, card_id)
+            );
+
             CREATE TABLE IF NOT EXISTS sessions (
                 token       TEXT PRIMARY KEY,
                 created_at  TEXT NOT NULL,

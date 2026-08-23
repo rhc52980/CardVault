@@ -280,6 +280,51 @@ public sealed record ToggleRequest(bool Enabled);
 /// </summary>
 public sealed record PhotoStatus(bool Enabled, int Count, long Bytes);
 
+public sealed record DeckRequest(string? Name = null, string? Format = null, string? Notes = null);
+
+public sealed record DeckCardRequest(string CardId, int Quantity);
+
+public sealed record DeckSummary(
+    long Id,
+    string Name,
+    string Format,
+    string? Notes,
+    string CreatedAt,
+    string? UpdatedAt,
+    /// <summary>Cards the list calls for, counting copies.</summary>
+    int Cards,
+    /// <summary>Copies you'd still have to find to play it.</summary>
+    int Missing);
+
+public sealed record DeckCard(
+    string CardId,
+    string Name,
+    string? SetName,
+    string? Number,
+    string? Rarity,
+    string? Supertype,
+    string? ImageSmall,
+    /// <summary>Copies the deck calls for.</summary>
+    int Needed,
+    /// <summary>Copies in your collection, across every entry.</summary>
+    int Owned,
+    /// <summary>What you'd have to find. Zero when you already have enough.</summary>
+    int Short,
+    /// <summary>Whether the card may be played in this deck's format.</summary>
+    bool Legal,
+    /// <summary>Basic Energy, the one card with no copy limit.</summary>
+    bool BasicEnergy,
+    bool OverCopyLimit);
+
+public sealed record Deck(
+    DeckSummary Summary,
+    IReadOnlyList<DeckCard> Cards,
+    /// <summary>
+    /// What stops this being playable. Reported, never enforced — a deck under
+    /// construction is not a mistake.
+    /// </summary>
+    IReadOnlyList<string> Problems);
+
 /// <summary>How one import batch compares against the scan file it came from.</summary>
 public sealed record BatchReconcile(
     string BatchId,
