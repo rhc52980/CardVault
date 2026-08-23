@@ -141,6 +141,47 @@ export interface ReconcileReport {
   missing: MissingScan[]
 }
 
+/** One card in a vault someone shared. No prices, locations, notes or photos. */
+export interface SharedCard {
+  cardId: string
+  name?: string | null
+  setName?: string | null
+  number?: string | null
+  rarity?: string | null
+  condition?: string | null
+  language?: string | null
+  quantity: number
+}
+
+export interface FriendVaultSummary {
+  id: number
+  name: string
+  /** When they exported it. A list from March trades differently to today's. */
+  exportedAt?: string | null
+  importedAt: string
+  owned: number
+  wanted: number
+}
+
+export interface TradeMatch {
+  cardId: string
+  name: string
+  setName?: string | null
+  number?: string | null
+  rarity?: string | null
+  condition?: string | null
+  language?: string | null
+  theirQuantity: number
+  /** Copies you could spare — what you own beyond the one you're keeping. */
+  yourQuantity: number
+}
+
+export interface FriendMatches {
+  vault: FriendVaultSummary
+  theyHave: TradeMatch[]
+  youCouldOffer: TradeMatch[]
+}
+
 export interface DeckSummary {
   id: number
   name: string

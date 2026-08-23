@@ -53,6 +53,30 @@ Locations come through CSV import too — the column can be called `Location`,
 `Storage`, `Binder`, `Box`, `Where`, `Stored` or `Placement` — and are included
 in the CSV export.
 
+## Swapping collections with someone
+
+**My vault → Friends.** Export a share file, send it to whoever you trade with, import
+theirs. CardVault then shows two lists: cards they have that are on your want list, and
+cards they want that you hold a spare of.
+
+**A share file carries no money.** No purchase prices, no valuations, no locations,
+notes, photographs or review flags — just which cards, how many, and what condition.
+Those fields don't exist on the shared record at all, so the leak isn't filtered out,
+it's impossible to write. Hand-entered items are left out too: a sealed box's id means
+nothing in anyone else's vault.
+
+**Their vault is stored entirely separately** and never merged with yours. It can't
+change what you own, what you're worth, your set completion or your decks, and
+removing it is one button.
+
+A file rather than a link, deliberately. Nothing about your server becomes reachable,
+there's no URL to leak into a chat window or a screenshot, and it works when the server
+is only on your own network. The cost is that a file is a snapshot, which is why the
+date they exported it is shown rather than hidden.
+
+"Spare" means owning more than one. The single copy in your binder isn't offered —
+giving that up is a decision, not an inventory fact.
+
 ## Decks
 
 **Decks** in the top nav. A deck is a list of cards you want to play, which is a

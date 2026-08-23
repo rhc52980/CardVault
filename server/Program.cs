@@ -99,6 +99,9 @@ builder.Services.AddSingleton<ReconcileService>();
 
 // Decks you're building, and the gap between them and what you own.
 builder.Services.AddSingleton<DeckService>();
+
+// Swapping collections with someone by file rather than by opening a door.
+builder.Services.AddSingleton<FriendVaultService>();
 builder.Services.AddSingleton<AuthService>();
 builder.Services.AddHttpClient();
 builder.Services.AddSingleton(sp => new UpdateChecker(
@@ -395,6 +398,51 @@ app.MapDelete("/api/collection/{id:long}", (
     photos.CleanUpOrphans();
     return Results.NoContent();
 });
+
+// --------------------------------------------------------------- trading by file
+
+/// Your collection and want list, reduced to what a trading partner needs. Carries no
+/// prices, locations, notes or photos -- see SharedCard for why that's structural.
+app.MapGet("/api/share/export", (FriendVaultService friends, SettingsService settings) =>
+{
+    var vault = friends.Export(settings.VaultName);
+    var json = System.Text.Json.JsonSerializer.Serialize(vault, new System.Text.Json.JsonSerializerOptions
+    {
+        WriteIndented = true,
+    });
+
+    var safe = new string(settings.VaultName.Where(c => char.IsLetterOrDigit(c) || c is '-' or '_').ToArray());
+    var name = $"{(safe.Length > 0 ? safe : "vault")}-share.json";
+    return Results.File(System.Text.Encoding.UTF8.GetBytes(json), "application/json", name);
+});
+
+app.MapGet("/api/friends", (FriendVaultService friends) => Results.Ok(friends.List()));
+
+app.MapPost("/api/friends", async (HttpRequest request, FriendVaultService friends, CancellationToken ct) =>
+{
+    if (!request.HasFormContentType)
+        return Results.BadRequest(new { error = "Send the shared vault as a file upload." });
+
+    var form = await request.ReadFormAsync(ct);
+    var file = form.Files.GetFile("vault") ?? form.Files.FirstOrDefault();
+    if (file is null) return Results.BadRequest(new { error = "No file came through." });
+
+    using var reader = new StreamReader(file.OpenReadStream());
+    var json = await reader.ReadToEndAsync(ct);
+
+    var name = form.TryGetValue("name", out var n) && !string.IsNullOrWhiteSpace(n) ? n.ToString() : null;
+    var (ok, error, id) = friends.Import(json, name);
+    return ok ? Results.Ok(new { id }) : Results.BadRequest(new { error });
+});
+
+app.MapGet("/api/friends/{id:long}", (long id, FriendVaultService friends)
+    => friends.Matches(id) is { } m ? Results.Ok(m) : Results.NotFound());
+
+app.MapGet("/api/friends/{id:long}/cards", (long id, FriendVaultService friends, string kind = "own")
+    => Results.Ok(friends.Cards(id, kind)));
+
+app.MapDelete("/api/friends/{id:long}", (long id, FriendVaultService friends)
+    => friends.Delete(id) ? Results.NoContent() : Results.NotFound());
 
 // ------------------------------------------------------------------------- decks
 
