@@ -290,6 +290,16 @@ function OwnedRow({
     }
   }
 
+  async function dismissFlag() {
+    setBusy(true)
+    try {
+      await api.dismissFlag(entry.id)
+      onChanged()
+    } finally {
+      setBusy(false)
+    }
+  }
+
   async function saveLanguage(next: string) {
     setBusy(true)
     try {
@@ -545,6 +555,23 @@ function OwnedRow({
             ))}
           </select>
         </label>
+
+        {entry.flagged && (
+          <div className="mt-2 rounded-lg border border-gold/40 bg-gold/10 px-2.5 py-2">
+            <div className="text-xs text-gold">⚑ {entry.flagged}</div>
+            <div className="mt-1 text-[11px] leading-snug text-mute">
+              Nothing has been changed. Correct it yourself if the scan is right, or dismiss
+              this if the vault is.
+            </div>
+            <button
+              onClick={dismissFlag}
+              disabled={busy}
+              className="mt-1 text-xs text-arc transition hover:underline disabled:opacity-40"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
 
         {photosEnabled && (
           <div className="mt-2">

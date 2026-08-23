@@ -16,6 +16,7 @@ import type {
   ImportBatchSummary,
   ImportJob,
   PhotoStatus,
+  ReconcileReport,
   SaleRecord,
   SearchCard,
   SellRequest,
@@ -127,6 +128,33 @@ export const api = {
   async remove(id: number) {
     const res = await fetch(`/api/collection/${id}`, { method: 'DELETE' })
     if (!res.ok) throw new Error(`Could not delete entry ${id}`)
+  },
+
+  /**
+   * Compares the vault against a fresher read of the scans. Dry by default — pass
+   * apply to write the flags, which is the only thing it ever writes.
+   */
+  async reconcile(files: File[], apply: boolean) {
+    const body = new FormData()
+    for (const f of files) body.append('files', f)
+    if (apply) body.append('apply', 'true')
+    const res = await fetch('/api/reconcile', { method: 'POST', body })
+    if (!res.ok) {
+      const detail = await res.json().catch(() => null)
+      throw new Error(detail?.error ?? 'Could not compare those files')
+    }
+    return (await res.json()) as ReconcileReport
+  },
+
+  async clearFlags() {
+    const res = await fetch('/api/reconcile/flags', { method: 'DELETE' })
+    if (!res.ok) throw new Error('Could not clear the flags')
+    return (await res.json()) as { cleared: number }
+  },
+
+  async dismissFlag(entryId: number) {
+    const res = await fetch(`/api/collection/${entryId}/flag`, { method: 'DELETE' })
+    if (!res.ok) throw new Error('Could not dismiss that flag')
   },
 
   photoStatus() {
