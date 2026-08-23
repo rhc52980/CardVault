@@ -280,6 +280,60 @@ public sealed record ToggleRequest(bool Enabled);
 /// </summary>
 public sealed record PhotoStatus(bool Enabled, int Count, long Bytes);
 
+/// <summary>
+/// One card in a vault someone chose to share. What's absent is the design: no
+/// purchase price, no market value, no location, notes, photograph or review flag.
+/// A trading partner needs to know which cards and how many, and nothing else.
+/// </summary>
+public sealed record SharedCard(
+    string CardId,
+    string? Name,
+    string? SetName,
+    string? Number,
+    string? Rarity,
+    string? Condition,
+    string? Language,
+    int Quantity);
+
+public sealed record SharedVault(
+    /// <summary>Bumped only when the shape changes past what an older reader handles.</summary>
+    int Format,
+    string? Name,
+    string? ExportedAt,
+    IReadOnlyList<SharedCard> Owned,
+    IReadOnlyList<SharedCard> Wanted);
+
+public sealed record FriendVaultSummary(
+    long Id,
+    string Name,
+    /// <summary>When they exported it. A list from March trades differently to today's.</summary>
+    string? ExportedAt,
+    string ImportedAt,
+    int Owned,
+    int Wanted);
+
+/// <summary>A card one of you could give the other.</summary>
+public sealed record TradeMatch(
+    string CardId,
+    string Name,
+    string? SetName,
+    string? Number,
+    string? Rarity,
+    string? Condition,
+    string? Language,
+    int TheirQuantity,
+    /// <summary>Copies you could spare — what you own beyond the one you're keeping.</summary>
+    int YourQuantity);
+
+public sealed record FriendMatches(
+    FriendVaultSummary Vault,
+    /// <summary>Cards they own that are on your want list.</summary>
+    IReadOnlyList<TradeMatch> TheyHave,
+    /// <summary>Cards they want that you hold a spare of.</summary>
+    IReadOnlyList<TradeMatch> YouCouldOffer);
+
+public sealed record ImportFriendRequest(string? Name = null);
+
 public sealed record DeckRequest(string? Name = null, string? Format = null, string? Notes = null);
 
 public sealed record DeckCardRequest(string CardId, int Quantity);
