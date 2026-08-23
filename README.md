@@ -291,6 +291,22 @@ are deliberately excluded from two places where they'd be wrong:
 Deleting the last copy of a hand-entered item removes its synthetic card and its
 uploaded photo.
 
+### Your valuations are kept
+
+Every time you set what something is worth, the figure is recorded — so a booster box
+you valued at £900 in March and £1,250 now has a line on its chart rather than just a
+current number. It shows as **Your valuation** alongside any market series, and it's
+what the collection's value-over-time chart uses for that item, matching the grid,
+where your figure beats the market.
+
+Recorded once per day, so changing your mind twice in an afternoon is one opinion
+rather than three. And it is never read back as a market price: your own estimate
+sharing a table with fetched ones must not come out looking like something a market
+said.
+
+This matters most for sealed product, which usually has no other price at all —
+eBay asking prices need configuring, and nothing else quotes a booster box.
+
 ## Searching
 
 The search box reads what you typed rather than assuming everything is a name,

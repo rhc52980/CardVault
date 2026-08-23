@@ -18,6 +18,10 @@ public sealed class CollectionService(Db db, SettingsService settings, IEnumerab
     /// Language is read but not joined on: prices aren't held per language, which is
     /// exactly why a non-English copy is left unpriced in <see cref="Map"/> rather
     /// than taking the English figure sitting next to it.
+    ///
+    /// Your own valuations are excluded from that lookup. They live in the same table
+    /// so the chart can draw them, but feeding one back as the market price would
+    /// quote your own number to you as though somebody else had said it.
     /// </summary>
     private const string SelectItems = """
         SELECT c.id, c.card_id, c.quantity, c.variant, c.condition, c.grade,
@@ -29,6 +33,7 @@ public sealed class CollectionService(Db db, SettingsService settings, IEnumerab
                (SELECT p.market FROM price_history p
                  WHERE p.card_id = c.card_id AND p.variant = c.variant
                    AND p.currency = $currency AND p.market IS NOT NULL
+                   AND p.source <> $manual
                  ORDER BY p.captured_on DESC LIMIT 1),
                c.import_batch, c.language, c.photo, c.flagged
         FROM collection c
@@ -41,6 +46,7 @@ public sealed class CollectionService(Db db, SettingsService settings, IEnumerab
         using var cmd = conn.CreateCommand();
         cmd.CommandText = SelectItems + " ORDER BY c.added_at DESC";
         cmd.Parameters.AddWithValue("$currency", PreferredCurrency());
+        cmd.Parameters.AddWithValue("$manual", Valuations.Source);
 
         var items = new List<CollectionItem>();
         using var r = cmd.ExecuteReader();
@@ -86,7 +92,41 @@ public sealed class CollectionService(Db db, SettingsService settings, IEnumerab
         cmd.Parameters.AddWithValue("$location", (object?)req.Location ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$language", Languages.Normalize(req.Language));
         cmd.Parameters.AddWithValue("$addedAt", DateTime.UtcNow.ToString("o"));
-        return (long)(cmd.ExecuteScalar() ?? 0L);
+        var id = (long)(cmd.ExecuteScalar() ?? 0L);
+
+        if (req.ManualValue is not null) RecordValuation(id);
+        return id;
+    }
+
+    /// <summary>
+    /// Writes what you say a card is worth into the price history, so revaluing it
+    /// over months leaves a line on the chart rather than just a new number.
+    ///
+    /// This is the only price sealed product and slabs usually have: nothing external
+    /// prices them dependably, so without recording your own figure their chart stays
+    /// permanently empty.
+    ///
+    /// Keyed by day like every other source, so changing your mind twice in an
+    /// afternoon leaves one point rather than a scribble. In the currency of the
+    /// chosen market, because that's the currency you were thinking in when you typed it.
+    /// </summary>
+    private void RecordValuation(long entryId)
+    {
+        using var conn = db.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = """
+            INSERT INTO price_history (card_id, variant, source, currency, captured_on, market)
+            SELECT c.card_id, c.variant, $source, $currency, $today, c.manual_value
+            FROM collection c
+            WHERE c.id = $id AND c.manual_value IS NOT NULL
+            ON CONFLICT(card_id, variant, source, captured_on)
+            DO UPDATE SET market = excluded.market
+            """;
+        cmd.Parameters.AddWithValue("$source", Valuations.Source);
+        cmd.Parameters.AddWithValue("$currency", PreferredCurrency());
+        cmd.Parameters.AddWithValue("$today", DateTime.UtcNow.ToString("yyyy-MM-dd"));
+        cmd.Parameters.AddWithValue("$id", entryId);
+        cmd.ExecuteNonQuery();
     }
 
     public bool Update(long id, UpdateEntryRequest req)
@@ -99,7 +139,13 @@ public sealed class CollectionService(Db db, SettingsService settings, IEnumerab
         cmd.CommandText = $"UPDATE collection SET {string.Join(", ", sets)} WHERE id = $id";
         foreach (var (k, v) in pars) cmd.Parameters.AddWithValue(k, v);
         cmd.Parameters.AddWithValue("$id", id);
-        return cmd.ExecuteNonQuery() > 0;
+        var changed = cmd.ExecuteNonQuery() > 0;
+
+        // Only when you actually set a figure. Clearing one is not a valuation, and
+        // an edit that never mentioned the value shouldn't restate yesterday's.
+        if (changed && req.ManualValue is not null && !req.ClearManualValue) RecordValuation(id);
+
+        return changed;
     }
 
     /// <summary>
@@ -339,7 +385,10 @@ public sealed class CollectionService(Db db, SettingsService settings, IEnumerab
                 SELECT captured_on, card_id, variant, market,
                        ROW_NUMBER() OVER (
                            PARTITION BY captured_on, card_id, variant
-                           ORDER BY (source = $source) DESC, source
+                           -- Your own figure first, matching the grid, where a manual
+                           -- value beats the market. Anything else would draw a chart
+                           -- that disagrees with the total printed above it.
+                           ORDER BY (source = $manual) DESC, (source = $source) DESC, source
                        ) AS rn
                 FROM price_history
                 WHERE market IS NOT NULL AND currency = $currency
@@ -353,6 +402,7 @@ public sealed class CollectionService(Db db, SettingsService settings, IEnumerab
             ORDER BY p.captured_on
             """;
         cmd.Parameters.AddWithValue("$source", settings.PreferredPriceSource);
+        cmd.Parameters.AddWithValue("$manual", Valuations.Source);
         cmd.Parameters.AddWithValue("$language", Languages.Default);
         cmd.Parameters.AddWithValue("$currency", PreferredCurrency());
         var points = new List<ValuePoint>();
