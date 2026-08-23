@@ -12,6 +12,8 @@ import type {
   CollectionStats,
   CommitResult,
   CustomItemRequest,
+  Deck,
+  DeckSummary,
   FullCard,
   ImportBatchSummary,
   ImportJob,
@@ -155,6 +157,46 @@ export const api = {
   async dismissFlag(entryId: number) {
     const res = await fetch(`/api/collection/${entryId}/flag`, { method: 'DELETE' })
     if (!res.ok) throw new Error('Could not dismiss that flag')
+  },
+
+  decks() {
+    return fetch('/api/decks').then(json<DeckSummary[]>)
+  },
+
+  deck(id: number) {
+    return fetch(`/api/decks/${id}`).then(json<Deck>)
+  },
+
+  createDeck(body: { name?: string; format?: string; notes?: string }) {
+    return fetch('/api/decks', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }).then(json<{ id: number }>)
+  },
+
+  async updateDeck(id: number, body: { name?: string; format?: string; notes?: string }) {
+    const res = await fetch(`/api/decks/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    if (!res.ok) throw new Error('Could not update that deck')
+  },
+
+  async deleteDeck(id: number) {
+    const res = await fetch(`/api/decks/${id}`, { method: 'DELETE' })
+    if (!res.ok) throw new Error('Could not delete that deck')
+  },
+
+  /** Sets how many copies the deck calls for. Zero takes the card out. */
+  async setDeckCard(id: number, cardId: string, quantity: number) {
+    const res = await fetch(`/api/decks/${id}/cards`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cardId, quantity }),
+    })
+    if (!res.ok) throw new Error('Could not change that card')
   },
 
   photoStatus() {

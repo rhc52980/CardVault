@@ -53,6 +53,27 @@ Locations come through CSV import too — the column can be called `Location`,
 `Storage`, `Binder`, `Box`, `Where`, `Stored` or `Placement` — and are included
 in the CSV export.
 
+## Decks
+
+**Decks** in the top nav. A deck is a list of cards you want to play, which is a
+different thing from the cards you own — so it can call for cards you haven't got,
+and the useful number it gives you is how many you'd still have to find.
+
+Search the whole catalogue to add a card, set how many copies the list calls for, and
+each row shows what you own against what it needs. Pick Standard, Expanded or
+Unlimited and the deck is judged against it: cards that aren't legal are called out,
+as is being over the four-copy limit or short of sixty cards.
+
+**The rules are reported, never enforced.** A deck of 43 cards with five Pikachu in it
+is a deck in progress, and refusing to save it would make this useless for what people
+actually do — build towards a list over weeks. Legality comes from the card itself
+rather than being hard-coded, so rotation looks after itself.
+
+Two details worth knowing: Basic Energy has no copy limit, so twenty Fire Energy is
+fine where twenty Pikachu is not; and a card the API says nothing about has rotated,
+which counts as not legal rather than as permission. Two decks may both count on the
+same copy — you build one at a time and move cards between them.
+
 ## Checking the vault against your scans
 
 If your collection came in by scanning cards and importing the result, the scans keep
