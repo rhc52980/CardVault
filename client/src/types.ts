@@ -120,6 +120,15 @@ export interface BatchReconcile {
   neverImported: number
 }
 
+/** A card scanned but never in the vault — enough to import it straight back. */
+export interface MissingScan {
+  scanFile: string
+  file: string
+  name?: string | null
+  setName?: string | null
+  number?: string | null
+}
+
 export interface ReconcileReport {
   /** False for a dry run, which reports without writing a single flag. */
   applied: boolean
@@ -128,6 +137,8 @@ export interface ReconcileReport {
   disagreed: number
   neverImported: number
   unmatchedFiles: string[]
+  /** Every scanned card with nothing to show for it in the vault. */
+  missing: MissingScan[]
 }
 
 /** Whether your own card photos are switched on, and what they cost in disk. */
