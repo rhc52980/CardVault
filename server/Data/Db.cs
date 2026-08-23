@@ -260,6 +260,15 @@ public sealed class Db
         // entry, and the set completion built on it, are shared.
         AddColumn(conn, "collection", "language", "TEXT NOT NULL DEFAULT 'en'");
 
+        // What a later look at your scans says this card should have been, when that
+        // disagrees with what got imported. A note, never a correction: the entry keeps
+        // the card it was imported as, and changing it stays your decision.
+        //
+        // Set only by a reconciliation run and cleared by dismissing it or running
+        // another. Null for everything that agrees, which is most of it.
+        AddColumn(conn, "collection", "flagged", "TEXT");
+        AddColumn(conn, "collection", "flagged_at", "TEXT");
+
         // The file name of your own photograph of this copy, if you've attached one.
         // Per entry rather than per card on purpose: the whole point is telling two
         // copies of the same card apart, which a shared image could never do.
