@@ -141,6 +141,43 @@ export interface ReconcileReport {
   missing: MissingScan[]
 }
 
+export interface DeckSummary {
+  id: number
+  name: string
+  format: string
+  notes?: string | null
+  createdAt: string
+  updatedAt?: string | null
+  /** Cards the list calls for, counting copies. */
+  cards: number
+  /** Copies you'd still have to find to play it. */
+  missing: number
+}
+
+export interface DeckCard {
+  cardId: string
+  name: string
+  setName?: string | null
+  number?: string | null
+  rarity?: string | null
+  supertype?: string | null
+  imageSmall?: string | null
+  needed: number
+  owned: number
+  short: number
+  legal: boolean
+  /** Basic Energy, the one card with no copy limit. */
+  basicEnergy: boolean
+  overCopyLimit: boolean
+}
+
+export interface Deck {
+  summary: DeckSummary
+  cards: DeckCard[]
+  /** What stops this being playable. Reported, never enforced. */
+  problems: string[]
+}
+
 /** Whether your own card photos are switched on, and what they cost in disk. */
 export interface PhotoStatus {
   enabled: boolean

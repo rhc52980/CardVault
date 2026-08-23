@@ -96,6 +96,9 @@ builder.Services.AddSingleton<PhotoService>();
 // Compares the vault against a fresher read of the scans it came from. Writes notes,
 // never corrections -- see ReconcileService for why that line matters.
 builder.Services.AddSingleton<ReconcileService>();
+
+// Decks you're building, and the gap between them and what you own.
+builder.Services.AddSingleton<DeckService>();
 builder.Services.AddSingleton<AuthService>();
 builder.Services.AddHttpClient();
 builder.Services.AddSingleton(sp => new UpdateChecker(
@@ -392,6 +395,27 @@ app.MapDelete("/api/collection/{id:long}", (
     photos.CleanUpOrphans();
     return Results.NoContent();
 });
+
+// ------------------------------------------------------------------------- decks
+
+app.MapGet("/api/decks", (DeckService decks) => Results.Ok(decks.List()));
+
+app.MapGet("/api/decks/{id:long}", (long id, DeckService decks)
+    => decks.Get(id) is { } deck ? Results.Ok(deck) : Results.NotFound());
+
+app.MapPost("/api/decks", (DeckRequest req, DeckService decks)
+    => Results.Ok(new { id = decks.Create(req) }));
+
+app.MapPatch("/api/decks/{id:long}", (long id, DeckRequest req, DeckService decks)
+    => decks.Update(id, req) ? Results.NoContent() : Results.NotFound());
+
+app.MapDelete("/api/decks/{id:long}", (long id, DeckService decks)
+    => decks.Delete(id) ? Results.NoContent() : Results.NotFound());
+
+/// Sets how many copies of a card the deck calls for. Zero removes it — the same
+/// gesture as decrementing the last one, so there's no separate verb for it.
+app.MapPut("/api/decks/{id:long}/cards", (long id, DeckCardRequest req, DeckService decks)
+    => decks.SetCard(id, req.CardId, req.Quantity) ? Results.NoContent() : Results.NotFound());
 
 // ------------------------------------------------ checking the vault against scans
 

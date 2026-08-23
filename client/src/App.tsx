@@ -9,12 +9,13 @@ import { ImportView } from './components/ImportView'
 import { LoginScreen } from './components/LoginScreen'
 import { PriceRefreshButton } from './components/PriceRefreshButton'
 import { SearchView } from './components/SearchView'
+import { DecksView } from './components/DecksView'
 import { SetsView } from './components/SetsView'
 import { SettingsView } from './components/SettingsView'
 import { StatsBar } from './components/StatsBar'
 import type { AuthStatus, CollectionItem, CollectionStats } from './types'
 
-type Tab = 'vault' | 'sets' | 'search' | 'import' | 'settings'
+type Tab = 'vault' | 'decks' | 'sets' | 'search' | 'import' | 'settings'
 
 export default function App() {
   const [tab, setTab] = useState<Tab>('vault')
@@ -134,6 +135,7 @@ export default function App() {
             {(
               [
                 ['vault', 'My vault'],
+                ['decks', 'Decks'],
                 ['sets', 'Sets'],
                 ['search', 'Add cards'],
                 ['import', 'Import CSV'],
@@ -180,6 +182,7 @@ export default function App() {
               onGoToSearch={() => setTab('search')}
             />
           )}
+          {tab === 'decks' && <DecksView />}
           {tab === 'sets' && <SetsView onCollectionChanged={refresh} />}
           {tab === 'search' && <SearchView onCollectionChanged={refresh} />}
           {tab === 'import' && <ImportView onImported={refresh} />}
