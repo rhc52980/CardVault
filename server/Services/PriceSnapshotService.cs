@@ -138,8 +138,17 @@ public sealed class PriceSnapshotService(
         {
             try
             {
-                var captured = await CaptureAsync(ct);
-                if (captured > 0) log.LogInformation("Captured prices for {Count} cards", captured);
+                // Every collection, not just the one whose cookie happened to be set
+                // last. A vault whose prices silently stopped updating because someone
+                // else's browser was the most recent visitor would be a baffling bug.
+                var registry = services.GetRequiredService<Data.VaultRegistry>();
+                foreach (var vault in registry.List())
+                {
+                    var captured = 0;
+                    await Data.CurrentVault.WithAsync(vault.Id, async () => captured = await CaptureAsync(ct));
+                    if (captured > 0)
+                        log.LogInformation("Captured prices for {Count} cards in {Vault}", captured, vault.Name);
+                }
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {

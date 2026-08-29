@@ -32,6 +32,7 @@ import type {
   UpdateEntryRequest,
   UpdateStatus,
   UpdateWantRequest,
+  VaultInfo,
   WantItem,
 } from './types'
 
@@ -160,6 +161,46 @@ export const api = {
   async dismissFlag(entryId: number) {
     const res = await fetch(`/api/collection/${entryId}/flag`, { method: 'DELETE' })
     if (!res.ok) throw new Error('Could not dismiss that flag')
+  },
+
+  vaults() {
+    return fetch('/api/vaults').then(json<{ current: string; vaults: VaultInfo[] }>)
+  },
+
+  async createVault(name: string) {
+    const res = await fetch('/api/vaults', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name }),
+    })
+    if (!res.ok) {
+      const detail = await res.json().catch(() => null)
+      throw new Error(detail?.error ?? 'Could not create that collection')
+    }
+    return (await res.json()) as { id: string }
+  },
+
+  async renameVault(id: string, name: string) {
+    const res = await fetch(`/api/vaults/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name }),
+    })
+    if (!res.ok) throw new Error('Could not rename that collection')
+  },
+
+  async deleteVault(id: string) {
+    const res = await fetch(`/api/vaults/${encodeURIComponent(id)}`, { method: 'DELETE' })
+    if (!res.ok) {
+      const detail = await res.json().catch(() => null)
+      throw new Error(detail?.error ?? 'Could not remove that collection')
+    }
+    return (await res.json()) as { removed: boolean; warning?: string | null }
+  },
+
+  async selectVault(id: string) {
+    const res = await fetch(`/api/vaults/${encodeURIComponent(id)}/select`, { method: 'POST' })
+    if (!res.ok) throw new Error('Could not switch collection')
   },
 
   friends() {
