@@ -334,6 +334,15 @@ public sealed record FriendMatches(
 
 public sealed record ImportFriendRequest(string? Name = null);
 
+/// <summary>One of the collections this installation holds.</summary>
+public sealed record VaultInfo(
+    string Id,
+    string Name,
+    /// <summary>The collection the install started with. It can't be removed.</summary>
+    bool IsDefault);
+
+public sealed record VaultRequest(string? Name = null);
+
 public sealed record DeckRequest(string? Name = null, string? Format = null, string? Notes = null);
 
 public sealed record DeckCardRequest(string CardId, int Quantity);

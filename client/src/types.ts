@@ -182,6 +182,14 @@ export interface FriendMatches {
   youCouldOffer: TradeMatch[]
 }
 
+/** One of the collections this installation holds. */
+export interface VaultInfo {
+  id: string
+  name: string
+  /** The collection the install started with. It can't be removed. */
+  isDefault: boolean
+}
+
 export interface DeckSummary {
   id: number
   name: string

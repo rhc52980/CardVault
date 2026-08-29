@@ -12,9 +12,28 @@ namespace CardVault.Data;
 public sealed class DataPaths
 {
     public string Root { get; }
-    public string DatabaseFile => Path.Combine(Root, "vault.db");
+
+    /// <summary>
+    /// Where the collection in hand keeps its files.
+    ///
+    /// The default vault is the root itself, which is what a single-vault install
+    /// already looks like — so adding vaults moves nobody's existing collection, and
+    /// an install that never adds a second one is byte-for-byte what it was.
+    /// Additional vaults get a folder apiece under "vaults".
+    /// </summary>
+    public string VaultRoot => CurrentVault.Id == CurrentVault.Default
+        ? Root
+        : Path.Combine(Root, "vaults", CurrentVault.Id);
+
+    public string DatabaseFile => Path.Combine(VaultRoot, "vault.db");
+    public string BackupsDirectory => Path.Combine(VaultRoot, "backups");
+
+    /// <summary>
+    /// Card artwork, shared by every vault rather than split between them. It's a
+    /// cache of the same public images keyed by the same card ids: two people in one
+    /// house would download identical files into separate folders for no reason.
+    /// </summary>
     public string ImagesDirectory => Path.Combine(Root, "images");
-    public string BackupsDirectory => Path.Combine(Root, "backups");
 
     /// <summary>
     /// Artwork for the offline catalogue, kept apart from the on-demand image cache
@@ -32,7 +51,7 @@ public sealed class DataPaths
     /// Not covered by the automatic backup, which copies the database alone --
     /// scans are large and would turn a quick safety copy into a slow one.
     /// </summary>
-    public string PhotosDirectory => Path.Combine(Root, "photos");
+    public string PhotosDirectory => Path.Combine(VaultRoot, "photos");
 
     /// <summary>Where data lived before it was moved out of the app folder.</summary>
     public static string LegacyDirectory => Path.Combine(AppContext.BaseDirectory, "data");

@@ -105,6 +105,17 @@ public sealed class ImportRow
 public sealed class ImportJob
 {
     public required string Id { get; init; }
+
+    /// <summary>
+    /// The collection this import was started against.
+    ///
+    /// Jobs live in memory shared by every vault, and a commit writes cards. Without
+    /// this, starting an import, switching collections and pressing commit would put
+    /// somebody else's cards in your vault — the one cross-vault mistake that would
+    /// actually cost you something.
+    /// </summary>
+    public string Vault { get; init; } = Data.CurrentVault.Default;
+
     public string State { get; set; } = "resolving";
     public int Total { get; set; }
     public int Processed { get; set; }

@@ -53,6 +53,26 @@ Locations come through CSV import too — the column can be called `Location`,
 `Storage`, `Binder`, `Box`, `Where`, `Stored` or `Placement` — and are included
 in the CSV export.
 
+## More than one collection
+
+If more than one person keeps cards here, **Settings → Collections** adds another.
+Each gets its own cards, sales, decks, wants, photos and backups, and a dropdown
+appears in the header to switch between them. It only appears once there's more than
+one, so a household of one never sees it.
+
+Card artwork is shared between collections — it's the same picture whoever asked for
+it, and downloading it twice would be waste.
+
+**This separates collections, it doesn't hide them.** One password still gets into all
+of them. If you need people genuinely walled off, run a second CardVault with its own
+data directory instead — that's stronger isolation than this could offer, and it's a
+config change rather than a feature.
+
+The first collection is special in two ways: its files stay exactly where a
+single-vault install already put them, so gaining this feature moves nothing; and it
+can't be deleted, because a stray click there would take the collection the whole
+install exists for.
+
 ## Swapping collections with someone
 
 **My vault → Friends.** Export a share file, send it to whoever you trade with, import

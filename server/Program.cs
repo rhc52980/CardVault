@@ -52,6 +52,9 @@ var paths = new DataPaths(builder.Configuration, pathsLoggerFactory.CreateLogger
 var db = new Db(paths);
 db.Initialize();
 
+/// Names the cookie that remembers which collection a browser is looking at.
+const string VaultCookie = "cardvault_vault";
+
 builder.Services.AddSingleton(paths);
 builder.Services.AddSingleton(db);
 builder.Services.AddSingleton<CardCache>();
@@ -102,6 +105,10 @@ builder.Services.AddSingleton<DeckService>();
 
 // Swapping collections with someone by file rather than by opening a door.
 builder.Services.AddSingleton<FriendVaultService>();
+
+// The collections this install holds. Registered before anything that opens a
+// database, because which database that is now depends on the answer.
+builder.Services.AddSingleton<VaultRegistry>();
 builder.Services.AddSingleton<AuthService>();
 builder.Services.AddHttpClient();
 builder.Services.AddSingleton(sp => new UpdateChecker(
@@ -199,6 +206,23 @@ var staticFileOptions = new StaticFileOptions
 
 app.UseDefaultFiles();
 app.UseStaticFiles(staticFileOptions);
+
+// Which collection this request is about, before anything opens a database.
+//
+// Unknown ids fall back to the default rather than erroring: a cookie can outlive the
+// collection it names — someone removes one on another browser — and a stale cookie
+// should show you your cards, not a wall.
+app.Use(async (ctx, next) =>
+{
+    var wanted = ctx.Request.Cookies[VaultCookie];
+    var vaults = ctx.RequestServices.GetRequiredService<VaultRegistry>();
+
+    CurrentVault.Id = !string.IsNullOrWhiteSpace(wanted) && vaults.Exists(wanted)
+        ? wanted
+        : CurrentVault.Default;
+
+    await next();
+});
 
 // Everything that reveals or changes collection data requires a session once a
 // password is set. The static pages stay open because the login screen itself has
@@ -396,6 +420,49 @@ app.MapDelete("/api/collection/{id:long}", (
     if (!collection.Delete(id)) return Results.NotFound();
     custom.CleanUpOrphans();
     photos.CleanUpOrphans();
+    return Results.NoContent();
+});
+
+// -------------------------------------------------------------------- collections
+
+/// Which collections exist, and which one you're looking at.
+app.MapGet("/api/vaults", (VaultRegistry vaults)
+    => Results.Ok(new { current = CurrentVault.Id, vaults = vaults.List() }));
+
+app.MapPost("/api/vaults", (VaultRequest req, VaultRegistry vaults) =>
+{
+    var (ok, error, id) = vaults.Create(req.Name);
+    return ok ? Results.Ok(new { id }) : Results.BadRequest(new { error });
+});
+
+app.MapPatch("/api/vaults/{id}", (string id, VaultRequest req, VaultRegistry vaults)
+    => vaults.Rename(id, req.Name) ? Results.NoContent() : Results.NotFound());
+
+app.MapDelete("/api/vaults/{id}", (string id, VaultRegistry vaults) =>
+{
+    var (ok, error) = vaults.Delete(id);
+    if (!ok) return Results.BadRequest(new { error });
+
+    // A warning rather than a failure: the collection has gone from the app either
+    // way, and saying nothing about files left behind would be worse.
+    return Results.Ok(new { removed = true, warning = error });
+});
+
+/// Switches which collection the app is showing. A cookie rather than a setting,
+/// because it's a per-browser choice: two people at one house can be looking at
+/// different collections at the same time without fighting over a stored value.
+app.MapPost("/api/vaults/{id}/select", (string id, VaultRegistry vaults, HttpContext ctx) =>
+{
+    if (!vaults.Exists(id)) return Results.NotFound();
+
+    ctx.Response.Cookies.Append(VaultCookie, id, new CookieOptions
+    {
+        HttpOnly = true,
+        SameSite = SameSiteMode.Lax,
+        MaxAge = TimeSpan.FromDays(365),
+        Path = "/",
+    });
+
     return Results.NoContent();
 });
 

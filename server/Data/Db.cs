@@ -7,28 +7,58 @@ namespace CardVault.Data;
 /// cached card metadata from pokemontcg.io, the cards you actually own, and a
 /// daily price snapshot so we can chart collection value over time.
 /// </summary>
-public sealed class Db
+public sealed class Db(DataPaths paths)
 {
-    private readonly string _connectionString;
+    /// <summary>
+    /// Vaults whose schema has been brought up to date this run, so opening a
+    /// connection doesn't re-run every migration each time.
+    /// </summary>
+    private readonly HashSet<string> _ready = [];
+    private readonly Lock _readyGate = new();
 
-    public Db(DataPaths paths)
+    /// <summary>
+    /// Built per call rather than once in the constructor.
+    ///
+    /// That single indirection is what makes several collections possible: eighteen
+    /// services hold one Db between them, and none of them has to learn that vaults
+    /// exist. Which file this opens follows <see cref="CurrentVault"/>, which the
+    /// request middleware and the background jobs both set.
+    /// </summary>
+    private string ConnectionString => new SqliteConnectionStringBuilder
     {
-        _connectionString = new SqliteConnectionStringBuilder
-        {
-            DataSource = paths.DatabaseFile,
-            Mode = SqliteOpenMode.ReadWriteCreate,
-            Cache = SqliteCacheMode.Shared,
-        }.ToString();
-    }
+        DataSource = paths.DatabaseFile,
+        Mode = SqliteOpenMode.ReadWriteCreate,
+        Cache = SqliteCacheMode.Shared,
+    }.ToString();
 
     public SqliteConnection Open()
     {
-        var conn = new SqliteConnection(_connectionString);
+        EnsureReady();
+        var conn = new SqliteConnection(ConnectionString);
         conn.Open();
         using var pragma = conn.CreateCommand();
         pragma.CommandText = "PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;";
         pragma.ExecuteNonQuery();
         return conn;
+    }
+
+    /// <summary>
+    /// Creates the schema the first time a vault is opened in this process.
+    ///
+    /// A new collection has no file at all until something asks for it, so this is
+    /// where a second vault comes into existence — rather than at startup, which only
+    /// ever knew about one.
+    /// </summary>
+    private void EnsureReady()
+    {
+        var vault = CurrentVault.Id;
+        lock (_readyGate)
+        {
+            if (!_ready.Add(vault)) return;
+        }
+
+        Directory.CreateDirectory(paths.VaultRoot);
+        Initialize();
     }
 
     public void Initialize()
