@@ -10,6 +10,7 @@ import {
   rarityClass,
   typeClass,
 } from '../lib/cardStyles'
+import { whenAdded } from '../lib/dates'
 import type { CollectionItem, FullCard } from '../types'
 import { ConfirmButton } from './ConfirmButton'
 import { Modal } from './Modal'
@@ -381,6 +382,7 @@ function OwnedRow({
           {prettyVariant(entry.variant)} · {entry.condition}
           {entry.grade ? ` · ${gradeLabel(entry)}` : ''}
           {entry.language !== DEFAULT_LANGUAGE ? ` · ${languageName(entry.language)}` : ''}
+          <span className="text-mute"> · added {whenAdded(entry.addedAt)}</span>
         </div>
         <div className="mt-0.5 text-xs text-mute">
           {money(effectiveValue)} each

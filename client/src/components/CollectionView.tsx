@@ -8,6 +8,7 @@ import {
   languageTag,
   rarityClass,
 } from '../lib/cardStyles'
+import { ADDED_WINDOWS, addedWithin, whenAdded } from '../lib/dates'
 import type { CollectionItem, ImportBatchSummary } from '../types'
 import { ConfirmButton } from './ConfirmButton'
 import { FriendsView } from './FriendsView'
@@ -54,6 +55,10 @@ export function CollectionView({
   const [languageFilter, setLanguageFilter] = useState('')
   const [gradedFilter, setGradedFilter] = useState('')
   const [flaggedOnly, setFlaggedOnly] = useState(false)
+  // How recently a card arrived. The import filter beside it only reaches cards that
+  // came in on a CSV; one added by hand belongs to no batch, and this is the only
+  // handle there is on those.
+  const [addedFilter, setAddedFilter] = useState('')
   const [batchFilter, setBatchFilter] = useState('')
   const [batches, setBatches] = useState<ImportBatchSummary[]>([])
   // Only ever read for the count on the tab. A card reaching your price is the one
@@ -165,6 +170,7 @@ export function CollectionView({
     if (gradedFilter === 'graded') out = out.filter((i) => !!i.grade)
     else if (gradedFilter === 'raw') out = out.filter((i) => !i.grade)
     if (flaggedOnly) out = out.filter((i) => !!i.flagged)
+    if (addedFilter) out = out.filter((i) => addedWithin(i.addedAt, Number(addedFilter)))
     if (batchFilter) out = out.filter((i) => i.importBatch === batchFilter)
     if (locationFilter) {
       out =
@@ -190,7 +196,7 @@ export function CollectionView({
       }
     })
     return sorted
-  }, [items, filter, setFilter_, languageFilter, gradedFilter, flaggedOnly, locationFilter, batchFilter, sort, kind])
+  }, [items, filter, setFilter_, languageFilter, gradedFilter, flaggedOnly, addedFilter, locationFilter, batchFilter, sort, kind])
 
   // Entries a scan comparison disagreed with. Counted over everything you own, not
   // the current view, so narrowing a filter can't make the number look better.
@@ -531,6 +537,23 @@ export function CollectionView({
           </select>
         )}
 
+        <select
+          value={addedFilter}
+          onChange={(e) => {
+            setAddedFilter(e.target.value)
+            // Sorting newest-first is what you meant by asking for recent ones.
+            if (e.target.value) setSort('added')
+          }}
+          className={control}
+        >
+          <option value="">Added any time</option>
+          {ADDED_WINDOWS.map((w) => (
+            <option key={w.key} value={w.key}>
+              {w.label}
+            </option>
+          ))}
+        </select>
+
         {batches.length > 0 && (
           <select
             value={batchFilter}
@@ -666,6 +689,7 @@ export function CollectionView({
                   )}
                 </div>
                 {item.location && <div className="truncate text-white/70">📍 {item.location}</div>}
+                <div className="truncate text-white/60">Added {whenAdded(item.addedAt)}</div>
               </div>
             }
             onClick={() => setDetailCardId(item.cardId)}
