@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { api, cardImage, money } from '../api'
+import { toast } from '../lib/toast'
 import {
   CONDITIONS,
   CONDITION_LABELS,
@@ -60,6 +61,15 @@ export function AddCardDialog({
         location: location.trim() || null,
         language,
       })
+      // Said before the dialog closes, because the dialog closing is the only other
+      // signal you get and on its own it's indistinguishable from a cancel.
+      toast(
+        quantity > 1 ? `Added ${quantity} × ${card.name}` : `Added ${card.name}`,
+        [card.setName, card.number && `#${card.number}`, prettyVariant(variant)]
+          .filter(Boolean)
+          .join(' · '),
+      )
+
       onAdded()
       onClose()
     } catch (err) {

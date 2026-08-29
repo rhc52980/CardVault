@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import { api } from '../api'
+import { toast } from '../lib/toast'
 import {
   CONDITIONS,
   CONDITION_LABELS,
@@ -98,6 +99,12 @@ export function ManualEntryDialog({ onClose, onAdded }: { onClose: () => void; o
         },
         file,
       )
+
+      toast(
+        quantity > 1 ? `Added ${quantity} × ${name.trim()}` : `Added ${name.trim()}`,
+        kind.label,
+      )
+
       onAdded()
       onClose()
     } catch (err) {

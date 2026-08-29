@@ -11,6 +11,7 @@ import { PriceRefreshButton } from './components/PriceRefreshButton'
 import { SearchView } from './components/SearchView'
 import { DecksView } from './components/DecksView'
 import { SetsView } from './components/SetsView'
+import { Toaster } from './components/Toaster'
 import { SettingsView } from './components/SettingsView'
 import { StatsBar } from './components/StatsBar'
 import type { AuthStatus, CollectionItem, CollectionStats } from './types'
@@ -94,6 +95,7 @@ export default function App() {
 
   return (
     <div className="aurora relative min-h-full">
+      <Toaster />
       <div className="relative z-10 mx-auto max-w-[1600px] px-5 py-6 sm:px-8">
         <header className="mb-6 flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3">
