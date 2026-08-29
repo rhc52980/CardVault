@@ -12,6 +12,7 @@ import { SearchView } from './components/SearchView'
 import { DecksView } from './components/DecksView'
 import { SetsView } from './components/SetsView'
 import { Toaster } from './components/Toaster'
+import { VaultSwitcher } from './components/VaultSwitcher'
 import { SettingsView } from './components/SettingsView'
 import { StatsBar } from './components/StatsBar'
 import type { AuthStatus, CollectionItem, CollectionStats } from './types'
@@ -132,6 +133,8 @@ export default function App() {
               {updateAvailable.latest} available ↗
             </a>
           )}
+
+          <VaultSwitcher />
 
           <nav className="flex rounded-xl border border-edge bg-surface p-1">
             {(

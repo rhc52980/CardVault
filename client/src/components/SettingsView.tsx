@@ -7,6 +7,7 @@ import type {
   PhotoStatus,
   PriceSourceSettings,
   SessionInfo,
+  VaultInfo,
 } from '../types'
 import {
   BACKGROUNDS,
@@ -60,6 +61,7 @@ export function SettingsView({
     <div className="max-w-3xl space-y-5">
       <VersionCard settings={settings} onChanged={load} />
       <VaultNameCard settings={settings} onRenamed={onVaultRenamed} onChanged={load} />
+      <CollectionsCard />
       <AppearanceCard />
       <PriceSourcesCard />
       <SecurityCard onAuthChanged={onAuthChanged} />
@@ -1334,6 +1336,120 @@ function PhotosCard() {
           Open any card in your vault and use <span className="text-bright">Add a photo of this copy</span>.
         </p>
       )}
+    </section>
+  )
+}
+
+// ------------------------------------------------------------------- collections
+
+/**
+ * The collections this installation holds.
+ *
+ * For a household, not for strangers: one password gets everyone in, and then they
+ * pick whose cards they're looking at. Nobody is hidden from anybody — that would be
+ * a different feature with a much larger surface, and two separate installs give
+ * stronger isolation than any amount of code here could.
+ */
+function CollectionsCard() {
+  const [vaults, setVaults] = useState<VaultInfo[]>([])
+  const [current, setCurrent] = useState('')
+  const [name, setName] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  const load = () =>
+    api
+      .vaults()
+      .then((v) => {
+        setVaults(v.vaults)
+        setCurrent(v.current)
+      })
+      .catch(() => {})
+
+  useEffect(() => {
+    void load()
+  }, [])
+
+  async function run(action: () => Promise<unknown>) {
+    setBusy(true)
+    setError(null)
+    try {
+      await action()
+      await load()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'That did not work')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <section className="panel rounded-xl p-4">
+      <h2 className="font-medium text-bright">Collections</h2>
+      <p className="mt-1 text-sm text-mute">
+        More than one person can keep cards here. Each collection has its own cards, sales,
+        decks, wants, photos and backups, and switching between them is a dropdown in the
+        header. Card artwork is shared, since it's the same picture either way.
+      </p>
+      <p className="mt-2 text-xs text-mute">
+        This separates collections, it doesn't hide them — one password still gets into all
+        of them. If you need people genuinely walled off from each other, run a second
+        CardVault with its own data directory instead.
+      </p>
+
+      <div className="mt-3 space-y-2">
+        {vaults.map((v) => (
+          <div
+            key={v.id}
+            className="flex flex-wrap items-center gap-2 rounded-lg bg-white/[0.03] px-3 py-2 text-sm"
+          >
+            <input
+              defaultValue={v.name}
+              onBlur={(e) => {
+                if (e.target.value.trim() && e.target.value.trim() !== v.name)
+                  void run(() => api.renameVault(v.id, e.target.value))
+              }}
+              className="min-w-[160px] flex-1 rounded-md border border-transparent bg-transparent px-1 py-0.5 text-bright outline-none hover:border-edge focus:border-arc"
+            />
+            {v.id === current && <span className="text-xs text-mint">viewing</span>}
+            {v.isDefault ? (
+              <span className="text-xs text-mute" title="The collection this install started with">
+                first
+              </span>
+            ) : (
+              <ConfirmButton
+                disabled={busy}
+                label="Remove"
+                confirm="Delete its cards"
+                onConfirm={() => run(() => api.deleteVault(v.id))}
+              />
+            )}
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="New collection name"
+          className="rounded-lg border border-edge bg-abyss px-3 py-1.5 text-sm text-bright outline-none focus:border-arc"
+        />
+        <button
+          disabled={busy || !name.trim()}
+          onClick={() =>
+            run(async () => {
+              await api.createVault(name)
+              setName('')
+            })
+          }
+          className="rounded-lg bg-arc px-3 py-1.5 text-sm text-white transition hover:brightness-110 disabled:opacity-40"
+        >
+          Add collection
+        </button>
+      </div>
+
+      {error && <div className="mt-2 text-sm text-rose">{error}</div>}
     </section>
   )
 }

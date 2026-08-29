@@ -45,12 +45,21 @@ public sealed class ImportService(
         ["language"] = ["language", "lang", "printing language", "locale"],
     };
 
-    public ImportJob? Get(string id) => _jobs.GetValueOrDefault(id);
+    /// <summary>
+    /// A job, but only to the collection it belongs to. Jobs are held in one place
+    /// for the whole process, and another vault has no business reading this one.
+    /// </summary>
+    public ImportJob? Get(string id)
+        => _jobs.GetValueOrDefault(id) is { } job && job.Vault == Data.CurrentVault.Id ? job : null;
 
     public ImportJob Start(string csv)
     {
         var rows = Csv.Parse(csv);
-        var job = new ImportJob { Id = Guid.NewGuid().ToString("n")[..12] };
+        var job = new ImportJob
+        {
+            Id = Guid.NewGuid().ToString("n")[..12],
+            Vault = Data.CurrentVault.Id,
+        };
 
         if (rows.Count < 2)
         {
@@ -597,6 +606,13 @@ public sealed class ImportService(
 
     public CommitResult Commit(string jobId, IReadOnlyList<CommitRow> rows)
     {
+        // Refuse a commit aimed at a different collection than the one the file was
+        // read against. Switching vaults mid-import is the only way to reach this, and
+        // going through with it would file the cards under the wrong person.
+        if (_jobs.TryGetValue(jobId, out var owner) && owner.Vault != Data.CurrentVault.Id)
+            return new CommitResult(0, [new CommitOutcome(
+                0, "", false, "That import was started against a different collection.")]);
+
         var outcomes = new List<CommitOutcome>();
         var seeded = new List<string>();
         var added = 0;
