@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api, cardImage, money } from '../api'
 import { CONDITIONS, CONDITION_LABELS, prettyVariant, rarityClass } from '../lib/cardStyles'
+import { toast } from '../lib/toast'
 import type { WantItem } from '../types'
 import { ConfirmButton } from './ConfirmButton'
 import { Modal } from './Modal'
@@ -296,6 +297,13 @@ function AcquireDialog({
         purchasePrice: paid.trim() === '' ? null : Number(paid),
         location: location.trim() || null,
       })
+
+      // Worth saying explicitly: this both adds the card and takes it off the want
+      // list, and the want vanishing is the only other thing you'd see.
+      toast(
+        quantity > 1 ? `Added ${quantity} × ${want.name}` : `Added ${want.name}`,
+        'Moved from your want list into the vault',
+      )
       onDone()
       onClose()
     } catch (err) {

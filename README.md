@@ -143,6 +143,21 @@ reappear if you switch it on again. Deleting them is a separate button that says
 **They are not in the automatic backup**, which copies the database alone: full scans
 would turn a quick safety copy into a slow one. Keep your originals.
 
+## Finding what you added recently
+
+Every entry records when it arrived, and the vault shows it — "added today", "added
+3 days ago", a date once it's older. An **Added** filter in the toolbar narrows to the
+last day, week, month or quarter, and picking one sorts newest first, because that's
+what you meant by asking.
+
+The line above the grid then answers the question worth asking: **how many cards
+arrived in that window and what they're worth**. Filter to the last 7 days and the
+total shown is the value of everything you added this week.
+
+This is the counterpart to the import filter beside it. That one groups cards by the
+CSV they came in on, which is no use for a card added one at a time — those belong to
+no batch, and the date is the only handle on them.
+
 ## Editing a lot of cards at once
 
 Hover a card and a **+** appears in its corner; click it to select. Shift-click
