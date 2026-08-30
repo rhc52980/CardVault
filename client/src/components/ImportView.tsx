@@ -673,7 +673,12 @@ function ImportRowCard({
             one of them is wrong and no amount of prose beats seeing them together
             next to the artwork.
           */}
-          {row.status === 'Mismatch' && !added && (
+          {/*
+            Only when an id was involved. A Mismatch also arises when a number found
+            nothing and the search fell back to the name, and there is no "this id is"
+            to report there — the row's own message says what happened instead.
+          */}
+          {row.status === 'Mismatch' && !added && row.claimedName != null && (
             <p className="mt-1 text-xs">
               <span className="text-mute">your file read </span>
               <span className="text-orange-200">

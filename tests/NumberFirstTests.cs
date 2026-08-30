@@ -1,4 +1,5 @@
 using CardVault.Data;
+using CardVault.Models;
 using CardVault.Services;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -121,6 +122,59 @@ public sealed class NumberFirstTests : IDisposable
     {
         public HttpClient CreateClient(string name) => throw new NotSupportedException();
     }
+
+    // ------------------------------------- the number is the one thing never given up
+
+    /// <summary>
+    /// The bug this pins down, reported from a real import. A CSV row read
+    /// "Purrloin, Darkness Ablaze, 106/189". The precise query returned 500 — which
+    /// pokemontcg.io does constantly — the search fell through to the card's name
+    /// alone, and a Purrloin from another set matched with nothing left to contradict
+    /// it. The row imported as Matched, confidently, at 096/159.
+    ///
+    /// Every other field degrades politely here: a name that matches nothing is
+    /// ignored rather than allowed to empty the list, which is right for fields that
+    /// get misread. Applying that same courtesy to the number is how a collection
+    /// quietly fills with the wrong printings.
+    /// </summary>
+    [Theory]
+    [InlineData("106", "096")]
+    [InlineData("4", "104")]
+    public void A_card_at_a_different_number_is_never_the_answer(string asked, string other)
+    {
+        var wrong = Candidate("x-1", "Purrloin", other);
+
+        Assert.Empty(ImportService.NarrowByNumber([wrong], asked));
+    }
+
+    [Fact]
+    public void The_right_number_survives()
+    {
+        var right = Candidate("x-1", "Purrloin", "106");
+
+        Assert.Single(ImportService.NarrowByNumber([right], "106"));
+    }
+
+    /// <summary>Leading zeros are formatting, not identity.</summary>
+    [Theory]
+    [InlineData("106", "106")]
+    [InlineData("006", "6")]
+    [InlineData("6", "006")]
+    [InlineData("TG12", "tg12")]
+    public void The_same_number_written_differently_still_matches(string asked, string stored)
+        => Assert.Single(ImportService.NarrowByNumber([Candidate("x-1", "Purrloin", stored)], asked));
+
+    /// <summary>
+    /// With no number to check against there is nothing to enforce, and a row that
+    /// only gave a name must still be able to match on it.
+    /// </summary>
+    [Fact]
+    public void A_row_with_no_number_is_left_alone()
+        => Assert.Single(ImportService.NarrowByNumber([Candidate("x-1", "Purrloin", "96")], null));
+
+    private static CardCandidate Candidate(string id, string name, string number)
+        => new(id, name, "Some Set", number, Rarity: null, ImageSmall: null,
+               MarketPrice: null, Variants: [], PrintedTotal: null);
 
     private void Seed(string id, string name, string setId, string setName, string number, int total)
     {

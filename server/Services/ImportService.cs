@@ -362,6 +362,12 @@ public sealed class ImportService(
 
         var lookupFailed = false;
 
+        // Cards that matched everything except the number. Kept so a row that finds no
+        // card at the number given can show what it did find rather than a bare "not
+        // found" — the difference between "your file is wrong somewhere" and no
+        // information at all.
+        var wrongNumber = new List<CardCandidate>();
+
         foreach (var query in queries)
         {
             ct.ThrowIfCancellationRequested();
@@ -406,6 +412,24 @@ public sealed class ImportService(
                 row.Message = $"{narrowed.Count} cards match — pick the right printing.";
                 return;
             }
+
+            // Nothing survived the number filter, but the search did find something.
+            // Those are the answer to "then what did you find?", so keep them.
+            if (row.Number is not null && all.Count > 0)
+                wrongNumber.AddRange(NarrowByName(all, row.Name));
+        }
+
+        // Found by name, at a different number. Offered rather than imported, because
+        // the number is the thing printed on the card in your hand and a silent
+        // substitution here is how a collection quietly fills with the wrong printings.
+        if (wrongNumber.Count > 0)
+        {
+            row.Status = ImportStatus.Mismatch;
+            row.Candidates = wrongNumber.DistinctBy(c => c.CardId).Take(12).ToList();
+            row.Message = $"Nothing found at {row.Number}"
+                          + (row.PrintedTotal is { } t ? $"/{t}" : "")
+                          + $" — but {row.Candidates.Count} card(s) match the name at other numbers.";
+            return;
         }
 
         if (lookupFailed)
@@ -474,8 +498,41 @@ public sealed class ImportService(
 
     private static List<CardCandidate> Narrow(List<CardCandidate> candidates, ImportRow row)
         => NarrowBySetName(
-            NarrowByName(NarrowByPrintedTotal(candidates, row.PrintedTotal), row.Name),
+            NarrowByName(NarrowByPrintedTotal(NarrowByNumber(candidates, row.Number), row.PrintedTotal), row.Name),
             row.SetName);
+
+    /// <summary>
+    /// Throws away anything whose number is not the number that was asked for.
+    ///
+    /// The only hard filter here, and it has to be. Everything else degrades politely —
+    /// if no candidate matches the name, the name is ignored rather than allowed to
+    /// empty the list — which is right for fields that get misread. It is catastrophic
+    /// for the number.
+    ///
+    /// The failure it prevents: the precise query for "106 in a 189-card set" comes back
+    /// 500, as pokemontcg.io routinely does, the loop falls through to searching on the
+    /// name alone, and a Purrloin from some other set matches on name with nothing left
+    /// to contradict it. The row is then Matched, confidently, to a card whose number is
+    /// not the one printed on the card in your hand.
+    ///
+    /// Better to find nothing and say so. A row that imports the wrong card is worse
+    /// than a row that waits.
+    /// </summary>
+    internal static List<CardCandidate> NarrowByNumber(List<CardCandidate> candidates, string? number)
+    {
+        if (candidates.Count == 0 || string.IsNullOrWhiteSpace(number)) return candidates;
+
+        var wanted = NormalizeNumber(number);
+        return candidates.Where(c => NormalizeNumber(c.Number) == wanted).ToList();
+    }
+
+    /// <summary>"006" and "6" are the same card; so are "TG12" and "tg12".</summary>
+    private static string NormalizeNumber(string? raw)
+    {
+        var n = (raw ?? "").Trim().ToLowerInvariant();
+        var trimmed = n.TrimStart('0');
+        return trimmed.Length > 0 ? trimmed : n;
+    }
 
     private async Task<JsonElement?> FetchCardAsync(string id, CancellationToken ct)
     {
