@@ -399,12 +399,32 @@ public sealed class CatalogueService(
     /// When the denominator matches nothing the query is repeated without it, so a
     /// wrong or unknown total widens the search rather than emptying it.
     /// </summary>
+    /// <summary>
+    /// Finds cards, loosening the question rather than answering "no".
+    ///
+    /// The name is dropped before the denominator, because they fail differently. A
+    /// number and a printed total are read off a fixed spot on the card and are either
+    /// right or absent; a name is the thing OCR and hurried typing get wrong. Filtering
+    /// on a misread name hides the very card the number had already identified, so
+    /// "106/189 plus a name that isn't quite right" must not come back empty when
+    /// "106/189" alone is a perfectly good answer.
+    /// </summary>
     public List<CatalogueCard> FindCards(
         string? setId, string? number, string? name, int? printedTotal, int limit = 50)
     {
         var rows = FindCardsCore(setId, number, name, printedTotal, limit);
+
+        // Both together are specific enough to stand on their own, so a name that
+        // matched nothing was a bad hint rather than a real constraint.
+        if (rows.Count == 0 && name is not null && number is not null && printedTotal is not null)
+            rows = FindCardsCore(setId, number, null, printedTotal, limit);
+
         if (rows.Count == 0 && printedTotal is not null)
             rows = FindCardsCore(setId, number, name, null, limit);
+
+        if (rows.Count == 0 && name is not null && number is not null)
+            rows = FindCardsCore(setId, number, null, null, limit);
+
         return rows;
     }
 
