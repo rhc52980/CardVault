@@ -33,7 +33,21 @@ const STATUS_STYLE: Record<ImportStatus, { label: string; className: string }> =
 const RESOLVABLE: ImportStatus[] = ['Matched', 'Ambiguous', 'Mismatch']
 
 /** Statuses that offer a list to choose from rather than a single answer. */
+/**
+ * Rows that must be settled before they can be imported — nothing has been chosen
+ * for them yet.
+ */
 const CHOOSABLE: ImportStatus[] = ['Ambiguous', 'Mismatch']
+
+/**
+ * A matched row is settled, but narrowing may have picked between several real
+ * printings on thin evidence. Where it did, the alternatives come back with the row
+ * and are offered — so the choice is one you made rather than one made for you.
+ * Rows with a single candidate carry none and look exactly as they did before.
+ */
+function hasAlternatives(row: ImportRow) {
+  return row.status === 'Matched' && row.candidates.length > 1
+}
 
 /**
  * How big the artwork is in the review list.
@@ -680,23 +694,66 @@ function ImportRowCard({
           {row.message && !added && <p className="mt-1 text-xs text-mute">{row.message}</p>}
           {!resolvable && <p className="mt-1 truncate text-xs text-mute italic">{row.source}</p>}
 
-          {CHOOSABLE.includes(row.status) && !added && (
-            <select
-              value={edit?.cardId ?? ''}
-              onChange={(e) => onPickCandidate(e.target.value)}
-              className={`${control} mt-2 w-full max-w-md`}
-            >
-              <option value="">
-                {row.status === 'Mismatch' ? 'Confirm which card this is…' : 'Choose the right card…'}
-              </option>
-              {row.candidates.map((c) => (
-                <option key={c.cardId} value={c.cardId}>
-                  {c.name} — {c.setName} #{c.number}
-                  {c.rarity ? ` (${c.rarity})` : ''}
-                  {c.marketPrice != null ? ` — ${money(c.marketPrice)}` : ''}
-                </option>
-              ))}
-            </select>
+          {hasAlternatives(row) && !added && (
+            <p className="mt-1 text-xs text-mute">
+              {row.candidates.length - 1} other{' '}
+              {row.candidates.length === 2 ? 'printing matches' : 'printings match'} this number —
+              change it below if this isn't the one.
+            </p>
+          )}
+
+          {/*
+            Pictures rather than a dropdown. These are printings of the same card
+            with the same name and number, so a list of text says almost nothing —
+            what tells them apart is the set symbol and the artwork, and you can see
+            those at a glance and not at all in an <option>.
+
+            Scrolls sideways rather than wrapping: the row is already a horizontal
+            thing next to its artwork, and reflowing it into a block would push every
+            other row down the page for a choice most of them don't have.
+          */}
+          {(CHOOSABLE.includes(row.status) || hasAlternatives(row)) && !added && (
+            <div className="mt-2 -mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+              {row.candidates.map((c) => {
+                const picked = edit?.cardId === c.cardId
+                return (
+                  <button
+                    key={c.cardId}
+                    type="button"
+                    onClick={() => onPickCandidate(c.cardId)}
+                    aria-pressed={picked}
+                    title={`${c.name} — ${c.setName} #${c.number}`}
+                    className={`w-24 shrink-0 rounded-lg p-1 text-left transition ${
+                      picked ? 'bg-arc/15 ring-2 ring-arc' : 'ring-1 ring-edge hover:ring-arc/50'
+                    }`}
+                  >
+                    <div className="relative">
+                      <img
+                        src={cardImage(c.cardId, 'small')}
+                        alt=""
+                        loading="lazy"
+                        onError={(e) => {
+                          if (c.imageSmall) (e.currentTarget as HTMLImageElement).src = c.imageSmall
+                        }}
+                        className="aspect-[245/342] w-full rounded object-cover"
+                      />
+                      {picked && (
+                        <span className="absolute top-1 right-1 rounded bg-arc px-1 text-[10px] font-bold text-white">
+                          ✓
+                        </span>
+                      )}
+                    </div>
+                    <div className="mt-1 truncate text-[11px] text-bright" title={c.setName ?? ''}>
+                      {c.setName}
+                    </div>
+                    <div className="truncate text-[10px] text-mute">
+                      #{c.number}
+                      {c.marketPrice != null && ` · ${money(c.marketPrice)}`}
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
           )}
 
           {resolvable && edit?.cardId && !added && (

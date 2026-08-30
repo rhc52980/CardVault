@@ -462,6 +462,21 @@ Values are normalised on the way in: `$250.00` becomes 250, `Lightly Played` and
 printing the card was never issued in (a reverse holo that doesn't exist), the
 import falls back to a real printing and says so.
 
+Where a row could have been more than one card, the candidates are shown **as
+pictures**, side by side, with the chosen one ticked — click another to switch,
+and the row's artwork and heading follow. These are printings of the same card
+with the same name and number, so a list of text says almost nothing; what tells
+them apart is the set symbol and the artwork.
+
+A collector number is only unique within a set, and two sets can share a printed
+total: `153/189` is both Darkness Ablaze and Astral Radiance. Narrowing picks one
+on whatever the file gave it, which may be nothing but a guess at the set, so the
+choice is shown rather than made silently.
+
+Rows with only one possible card look exactly as they always did. One candidate
+is not an alternative, and a picker offering no choice on every line of a
+hundred-row import is worse than none.
+
 Every row lands in one of six states, and **nothing is written to your
 collection until you press the button**:
 
