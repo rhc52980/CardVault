@@ -468,6 +468,16 @@ sitting on disk.
 A correct name still does its job — it's what separates two cards sharing a number and
 a set size.
 
+**A card at a different number is never the answer.** Every other field here degrades
+politely: a name matching nothing is ignored rather than allowed to empty the list,
+which is right for fields that get misread. The number is the exception, and has to be.
+Without that, a precise lookup failing — pokemontcg.io returns 500 often — lets the
+search fall through to the card's name alone and match the same Pokémon from a
+different set, importing it confidently at the wrong number.
+
+Where a number finds nothing, the row says so and offers what *did* match the name, so
+you can pick one deliberately or fix the file. It is never imported for you.
+
 Values are normalised on the way in: `$250.00` becomes 250, `Lightly Played` and
 `Excellent` both become `LP`, `Holo` becomes `holofoil`. If a row asks for a
 printing the card was never issued in (a reverse holo that doesn't exist), the
