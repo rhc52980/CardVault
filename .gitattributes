@@ -10,6 +10,12 @@
 *.sh        text eol=lf
 *.service   text eol=lf
 
+# The workflow runs on Linux and its `run:` blocks are shell. YAML itself tolerates
+# CRLF, but a script inside one reaching bash with \r on every line does not, which
+# is the same trap as install.sh above.
+*.yml       text eol=lf
+*.yaml      text eol=lf
+
 # Must be CRLF - cmd.exe and Windows PowerShell hosts expect it.
 *.bat       text eol=crlf
 *.cmd       text eol=crlf

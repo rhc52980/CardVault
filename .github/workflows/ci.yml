@@ -1,0 +1,75 @@
+# Builds and tests every push and pull request.
+#
+# The point is not to catch what a careful change would catch anyway -- it is to
+# check what is actually in the repository rather than what happens to be in
+# somebody's working directory. A file that was written but never committed passes
+# every test locally and breaks the moment anyone else clones it.
+#
+# Both halves run, because `dotnet test` says nothing about the frontend: a
+# TypeScript error only appears when the client is built, and that is a separate
+# command to forget.
+
+name: Build and test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A second push to the same branch makes the first run pointless. Cancel it rather
+# than queue behind it.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  server:
+    name: Server and tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      # The test project references the server, so building it builds both. There is
+      # no solution file and adding one just to name them together would be a file
+      # kept in step for no benefit.
+      - name: Restore
+        run: dotnet restore tests/CardVault.Tests.csproj
+
+      - name: Build
+        run: dotnet build tests/CardVault.Tests.csproj --no-restore -c Release
+
+      # Tests write real SQLite files to a temp directory, so they need no services
+      # and no network -- which is why this is one plain step and not a fixture.
+      - name: Test
+        run: dotnet test tests/CardVault.Tests.csproj --no-build -c Release --verbosity normal
+
+  client:
+    name: Client
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+
+      # `ci` rather than `install`: it installs exactly what the lockfile says and
+      # fails if the two disagree, which is the difference worth having here.
+      - name: Install
+        working-directory: client
+        run: npm ci
+
+      - name: Lint
+        working-directory: client
+        run: npm run lint
+
+      # Runs `tsc -b` before vite, so this is the type check as well as the build.
+      - name: Build
+        working-directory: client
+        run: npm run build
