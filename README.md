@@ -457,6 +457,17 @@ optional:
 | Location | storage, binder, box, where, stored, placement |
 | Notes | note, comment |
 
+**The number leads.** A collector number and its denominator — `106/189` — identify a
+card between them, and they're read off a fixed spot on the card, so they're either
+right or absent. A name is the thing OCR and hurried typing get wrong. So a name is
+used to choose *between* the cards a number found, never to decide whether the number
+found anything: `106/189` with a name that's slightly off still matches, where before
+the misspelling hid the card and the row went to the network for an answer already
+sitting on disk.
+
+A correct name still does its job — it's what separates two cards sharing a number and
+a set size.
+
 Values are normalised on the way in: `$250.00` becomes 250, `Lightly Played` and
 `Excellent` both become `LP`, `Holo` becomes `holofoil`. If a row asks for a
 printing the card was never issued in (a reverse holo that doesn't exist), the

@@ -281,9 +281,14 @@ public sealed class ImportService(
         {
             // The cards we already hold payloads for come first: they carry real prices
             // and a real printing list, neither of which the catalogue can offer.
+            // The name is left out once a number and a denominator are both present:
+            // between them they identify the card, and a misread name would hide it.
+            // Narrow still prefers an exact name match among whatever comes back.
+            var byNumberAlone = row.Number is not null && row.PrintedTotal is not null;
+            var cacheName = setId is null && !byNumberAlone ? row.Name : null;
+
             var cached = Narrow(
-                cache.FindPayloads(setId, row.Number, setId is null ? row.Name : null)
-                     .Select(ToCandidate).ToList(), row);
+                cache.FindPayloads(setId, row.Number, cacheName).Select(ToCandidate).ToList(), row);
 
             if (cached.Count == 1)
             {
@@ -302,7 +307,7 @@ public sealed class ImportService(
             //    months ago has never heard of last month's set.
             if (catalogue.IsUsable)
             {
-                var found = catalogue.FindCards(setId, row.Number, setId is null ? row.Name : null, row.PrintedTotal)
+                var found = catalogue.FindCards(setId, row.Number, cacheName, row.PrintedTotal)
                                      .Select(ToCandidate).ToList();
                 var offline = Narrow(found, row);
 
@@ -332,9 +337,17 @@ public sealed class ImportService(
         // Placed above the name forms because it is more precise than either.
         if (row.PrintedTotal is { } printedTotal && row.Number is not null)
         {
+            // Without the name, deliberately, and before the form that includes it.
+            // A number and a denominator identify a card between them; adding a name
+            // that OCR got slightly wrong turns a good query into no results and a
+            // wasted round trip against an API that is slow and often fails. Whatever
+            // comes back is narrowed by name afterwards, which prefers an exact match
+            // and keeps everything when there isn't one — so a correct name still
+            // decides, and a wrong one no longer excludes.
+            queries.Add($"number:{Escape(row.Number)} set.printedTotal:{printedTotal}");
+
             if (row.Name is not null)
                 queries.Add($"name:\"*{Escape(row.Name)}*\" number:{Escape(row.Number)} set.printedTotal:{printedTotal}");
-            queries.Add($"number:{Escape(row.Number)} set.printedTotal:{printedTotal}");
         }
 
         if (row.SetName is not null && row.Number is not null) queries.Add($"set.name:\"{Escape(row.SetName)}\" number:{Escape(row.Number)}");
