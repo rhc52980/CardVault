@@ -19,6 +19,8 @@ import type {
   FullCard,
   ImportBatchSummary,
   ImportJob,
+  Mover,
+  MoverSettings,
   PhotoStatus,
   ReconcileReport,
   SaleRecord,
@@ -161,6 +163,18 @@ export const api = {
   async dismissFlag(entryId: number) {
     const res = await fetch(`/api/collection/${entryId}/flag`, { method: 'DELETE' })
     if (!res.ok) throw new Error('Could not dismiss that flag')
+  },
+
+  movers() {
+    return fetch('/api/movers').then(json<{ settings: MoverSettings; cards: Mover[] }>)
+  },
+
+  saveMoverSettings(s: MoverSettings) {
+    return fetch('/api/movers/settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(s),
+    }).then(json<MoverSettings>)
   },
 
   vaults() {

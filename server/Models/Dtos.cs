@@ -334,6 +334,37 @@ public sealed record FriendMatches(
 
 public sealed record ImportFriendRequest(string? Name = null);
 
+/// <summary>
+/// What counts as a price move worth flagging. A percentage and an amount, both of
+/// which must be met — either alone is useless. Percentage floods the list with penny
+/// cards doubling; amount misses everything cheap that's genuinely running.
+/// </summary>
+/// <param name="MinAmount">
+/// Measured against the whole holding rather than one card. On a collection of
+/// commons no single card moves by anything, but eight copies shifting together do.
+/// </param>
+public sealed record MoverSettings(int Days, int MinPercent, double MinAmount);
+
+/// <summary>A card whose price has moved past the threshold.</summary>
+public sealed record Mover(
+    string CardId,
+    string Variant,
+    string Name,
+    string? SetName,
+    string? Number,
+    string? Rarity,
+    string? ImageSmall,
+    int Owned,
+    double Was,
+    double Now,
+    double Change,
+    double PercentChange,
+    /// <summary>What it did to your holding — the change times how many you have.</summary>
+    double LineChange,
+    /// <summary>The day the earlier reading was taken.</summary>
+    string From,
+    string To);
+
 /// <summary>One of the collections this installation holds.</summary>
 public sealed record VaultInfo(
     string Id,

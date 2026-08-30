@@ -182,6 +182,32 @@ export interface FriendMatches {
   youCouldOffer: TradeMatch[]
 }
 
+/** What counts as a price move worth flagging. Both thresholds must be met. */
+export interface MoverSettings {
+  days: number
+  minPercent: number
+  minAmount: number
+}
+
+export interface Mover {
+  cardId: string
+  variant: string
+  name: string
+  setName?: string | null
+  number?: string | null
+  rarity?: string | null
+  imageSmall?: string | null
+  owned: number
+  was: number
+  now: number
+  change: number
+  percentChange: number
+  /** What it did to your holding — the change times how many you have. */
+  lineChange: number
+  from: string
+  to: string
+}
+
 /** One of the collections this installation holds. */
 export interface VaultInfo {
   id: string

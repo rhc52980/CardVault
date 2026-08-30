@@ -13,6 +13,7 @@ import type { CollectionItem, ImportBatchSummary } from '../types'
 import { ConfirmButton } from './ConfirmButton'
 import { FriendsView } from './FriendsView'
 import { ImportsView } from './ImportsView'
+import { MoversView } from './MoversView'
 import { CardDetail } from './CardDetail'
 import { CardTile } from './CardTile'
 import { ManualEntryDialog } from './ManualEntryDialog'
@@ -50,7 +51,8 @@ export function CollectionView({
   const [manualOpen, setManualOpen] = useState(false)
   // Owned and sold are two views of the same collection, so they share a screen
   // rather than eating another slot in the top nav.
-  const [pane, setPane] = useState<'owned' | 'imports' | 'wanted' | 'sold' | 'friends'>('owned')
+  const [pane, setPane] =
+    useState<'owned' | 'imports' | 'wanted' | 'sold' | 'movers' | 'friends'>('owned')
   const [locationFilter, setLocationFilter] = useState('')
   const [languageFilter, setLanguageFilter] = useState('')
   const [gradedFilter, setGradedFilter] = useState('')
@@ -281,6 +283,7 @@ export function CollectionView({
             ['imports', unreviewed.length ? `Imports (${unreviewed.length})` : 'Imports'],
             ['wanted', wantsAtPrice ? `Wanted (${wantsAtPrice})` : 'Wanted'],
             ['sold', 'Sold'],
+            ['movers', 'Movers'],
             ['friends', 'Friends'],
           ] as const
         ).map(([key, text]) => (
@@ -363,6 +366,15 @@ export function CollectionView({
       <div className="space-y-5">
         {header}
         <WantedView onChanged={onChanged} onGoToSearch={onGoToSearch} />
+      </div>
+    )
+  }
+
+  if (pane === 'movers') {
+    return (
+      <div className="space-y-5">
+        {header}
+        <MoversView />
       </div>
     )
   }
