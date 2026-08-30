@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { api, cardImage } from '../api'
 import { rarityClass } from '../lib/cardStyles'
 import type { Deck, DeckSummary, SearchCard } from '../types'
@@ -114,11 +114,16 @@ function DeckEditor({ id, onClose }: { id: number; onClose: () => void }) {
   const [deck, setDeck] = useState<Deck | null>(null)
   const [busy, setBusy] = useState(false)
 
-  const load = () => api.deck(id).then(setDeck).catch(() => setDeck(null))
+  // Memoised so the effect below can depend on it honestly. Rebuilt only when the
+  // deck changes, which is exactly when the effect should run again.
+  const load = useCallback(
+    () => api.deck(id).then(setDeck).catch(() => setDeck(null)),
+    [id],
+  )
 
   useEffect(() => {
     void load()
-  }, [id])
+  }, [load])
 
   async function change(run: () => Promise<unknown>) {
     setBusy(true)
