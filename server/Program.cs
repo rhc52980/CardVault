@@ -109,6 +109,9 @@ builder.Services.AddSingleton<FriendVaultService>();
 // The collections this install holds. Registered before anything that opens a
 // database, because which database that is now depends on the answer.
 builder.Services.AddSingleton<VaultRegistry>();
+
+// Cards whose price has moved enough to be worth telling you about.
+builder.Services.AddSingleton<MoversService>();
 builder.Services.AddSingleton<AuthService>();
 builder.Services.AddHttpClient();
 builder.Services.AddSingleton(sp => new UpdateChecker(
@@ -421,6 +424,17 @@ app.MapDelete("/api/collection/{id:long}", (
     custom.CleanUpOrphans();
     photos.CleanUpOrphans();
     return Results.NoContent();
+});
+
+// ------------------------------------------------------------------- price movers
+
+app.MapGet("/api/movers", (MoversService movers)
+    => Results.Ok(new { settings = movers.Settings, cards = movers.Find() }));
+
+app.MapPut("/api/movers/settings", (MoverSettings req, MoversService movers) =>
+{
+    movers.Save(req);
+    return Results.Ok(movers.Settings);
 });
 
 // -------------------------------------------------------------------- collections

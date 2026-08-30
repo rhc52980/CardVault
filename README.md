@@ -53,6 +53,28 @@ Locations come through CSV import too — the column can be called `Location`,
 `Storage`, `Binder`, `Box`, `Where`, `Stored` or `Placement` — and are included
 in the CSV export.
 
+## Cards that have moved
+
+**My vault → Movers** lists cards whose price has changed enough to be worth knowing
+about, biggest effect on your holding first — a £6 rise on eight copies matters more
+than £40 on one, and only one of those changes what your collection is worth.
+
+**The threshold is a percentage and an amount, and both must be met.** Either alone is
+useless. A percentage on its own fills the page with 50p commons doubling; an amount on
+its own calls a 1% wobble on an expensive card news. Asking for 20% *and* £5 catches a
+£30 card going to £36 and stays quiet about the rest. Both numbers are yours to set,
+along with the window — 7, 30, 90, 180 or 365 days.
+
+Falls are listed alongside rises, on their own tab. The arithmetic is identical, and
+"sell before it slides further" is the mirror of the decision a rise informs.
+
+It obeys the same price rules as the vault: the chosen market in its currency, your own
+valuations excluded — your estimate rising because you raised it is not news — and
+slabs and non-English printings left out, because they have no market price to move.
+
+A card needs two readings before it can have moved at all, and prices are recorded once
+a day, so this stays quiet on a new install until some history has built up.
+
 ## More than one collection
 
 If more than one person keeps cards here, **Settings → Collections** adds another.
