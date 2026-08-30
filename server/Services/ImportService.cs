@@ -302,13 +302,13 @@ public sealed class ImportService(
             //    months ago has never heard of last month's set.
             if (catalogue.IsUsable)
             {
-                var offline = Narrow(
-                    catalogue.FindCards(setId, row.Number, setId is null ? row.Name : null, row.PrintedTotal)
-                             .Select(ToCandidate).ToList(), row);
+                var found = catalogue.FindCards(setId, row.Number, setId is null ? row.Name : null, row.PrintedTotal)
+                                     .Select(ToCandidate).ToList();
+                var offline = Narrow(found, row);
 
                 if (offline.Count == 1)
                 {
-                    Apply(row, offline[0]);
+                    Apply(row, offline[0], found);
                     return;
                 }
 
@@ -377,11 +377,12 @@ public sealed class ImportService(
                 await Task.Delay(150, ct);
             }
 
-            var narrowed = Narrow(payloads.Select(ToCandidate).ToList(), row);
+            var all = payloads.Select(ToCandidate).ToList();
+            var narrowed = Narrow(all, row);
 
             if (narrowed.Count == 1)
             {
-                Apply(row, narrowed[0]);
+                Apply(row, narrowed[0], all);
                 return;
             }
 
@@ -444,6 +445,19 @@ public sealed class ImportService(
 
         return found;
     }
+
+    /// <summary>
+    /// The other printings a matched row could have been, chosen card first.
+    ///
+    /// Empty when there was no genuine choice: one candidate is not an alternative,
+    /// and a picker offering a single option would be noise on every row of a
+    /// hundred-row import. Capped, because a bare number with no denominator can
+    /// match a great many cards and a list that long is not a choice either.
+    /// </summary>
+    internal static List<CardCandidate> Alternatives(CardCandidate chosen, List<CardCandidate>? found)
+        => found is { Count: > 1 }
+            ? [.. found.OrderByDescending(c => c.CardId == chosen.CardId).Take(12)]
+            : [];
 
     private static List<CardCandidate> Narrow(List<CardCandidate> candidates, ImportRow row)
         => NarrowBySetName(
@@ -518,12 +532,23 @@ public sealed class ImportService(
         return exact.Count > 0 ? exact : candidates;
     }
 
-    private static void Apply(ImportRow row, CardCandidate card)
+    /// <summary>
+    /// Settles a row on one card.
+    ///
+    /// <paramref name="alsoMatched"/> is what the search found before narrowing chose
+    /// between them. Kept rather than discarded so the review can offer them: a number
+    /// like 153/189 belongs to two different sets, and narrowing picks one on evidence
+    /// that may be thin — the CSV naming a set it guessed at. Being told "matched, and
+    /// here are the others it could be" is the difference between a decision you made
+    /// and one made for you.
+    /// </summary>
+    internal static void Apply(ImportRow row, CardCandidate card, List<CardCandidate>? alsoMatched = null)
     {
         var wanted = row.Variant;
 
         Describe(row, card);
         row.Status = ImportStatus.Matched;
+        row.Candidates = Alternatives(card, alsoMatched);
 
         if (!string.Equals(row.Variant, wanted, StringComparison.Ordinal))
             row.Message = $"No '{wanted}' printing — using '{row.Variant}'.";
