@@ -181,3 +181,103 @@ public class NameAgreementTests
         => new(id, name, set, "36", Rarity: null, ImageSmall: null,
                MarketPrice: null, Variants: ["normal"], PrintedTotal: null);
 }
+
+/// <summary>
+/// The denominator, treated as the file's word rather than as a hint.
+///
+/// Number and denominator are read off one fixed spot on the card, and 004/163 names a
+/// different card from 004/072 as surely as a different number would. The narrowing
+/// gives the denominator up rather than answering "no", which is right — a misread one
+/// should widen the search, not empty it — but giving a filter up is not the same as
+/// it having been satisfied, and every filter also stops early at a single candidate
+/// on the grounds that there is nothing to choose between. So one card arriving from
+/// anywhere was applied without the denominator ever being looked at: a cached Cacnea
+/// #4 from Shining Fates, a 72-card set, answered a row asking for 4/163.
+/// </summary>
+public class PrintedTotalTests
+{
+    private static ImportRow Row(string name, string number, int? total) => new()
+    {
+        Index = 0,
+        Source = "x",
+        ClaimedName = name,
+        ClaimedNumber = number,
+        ClaimedPrintedTotal = total,
+    };
+
+    private static CardCandidate Card(string set, string number, int? total)
+        => new($"{set}-{number}", "Cacnea", set, number, Rarity: null, ImageSmall: null,
+               MarketPrice: null, Variants: ["normal"], PrintedTotal: total);
+
+    /// <summary>The row that prompted this, in the form it actually arrived in.</summary>
+    [Fact]
+    public void The_same_number_in_a_different_sized_set_is_a_contradiction()
+        => Assert.True(ImportService.Contradicts(
+            Row("Cacnea", "4", 163), Card("Shining Fates", "4", 72)));
+
+    [Fact]
+    public void The_denominator_the_file_gave_is_a_match()
+        => Assert.False(ImportService.Contradicts(
+            Row("Cacnea", "4", 163), Card("Battle Styles", "4", 163)));
+
+    /// <summary>
+    /// Silence is not disagreement. Plenty of cards reach the importer without a
+    /// denominator of their own, and treating that as a contradiction would flag rows
+    /// that are perfectly well matched.
+    /// </summary>
+    [Fact]
+    public void A_card_with_no_denominator_of_its_own_cannot_contradict()
+        => Assert.False(ImportService.Contradicts(
+            Row("Cacnea", "4", 163), Card("Some Promo", "4", null)));
+
+    [Fact]
+    public void A_row_that_gave_no_denominator_has_nothing_to_contradict()
+        => Assert.False(ImportService.Contradicts(
+            Row("Cacnea", "4", null), Card("Shining Fates", "4", 72)));
+
+    /// <summary>
+    /// The set name is deliberately not in here. It is the field these files get wrong
+    /// most often, and it is genuinely overridable: a row reading "Palpitoad, Unified
+    /// Minds, 116/236" is right about the card and wrong about the set, because there
+    /// is no Palpitoad in Unified Minds and the only one at 116 is Cosmic Eclipse.
+    /// Both denominators are 236, so the file and the card agree on everything that is
+    /// read off the card itself, and the row should pass without a question.
+    /// </summary>
+    [Fact]
+    public void A_misread_set_name_alone_is_not_a_contradiction()
+    {
+        var row = Row("Palpitoad", "116", 236);
+        row.SetName = "Unified Minds";
+
+        Assert.False(ImportService.Contradicts(
+            row,
+            new CardCandidate("swsh12-116", "Palpitoad", "Cosmic Eclipse", "116",
+                Rarity: null, ImageSmall: null, MarketPrice: null,
+                Variants: ["normal"], PrintedTotal: 236)));
+    }
+
+    // ----------------------------------------------------------------- through Apply
+
+    [Fact]
+    public void A_contradicted_denominator_is_put_in_front_of_you()
+    {
+        var row = Row("Cacnea", "4", 163);
+
+        ImportService.Apply(row, Card("Shining Fates", "4", 72));
+
+        Assert.Equal(ImportStatus.Mismatch, row.Status);
+        Assert.Contains("4/163", row.Message);
+        Assert.Contains("4/72", row.Message);
+        Assert.Contains("Shining Fates", row.Message);
+    }
+
+    [Fact]
+    public void The_right_card_is_still_settled_without_a_question()
+    {
+        var row = Row("Cacnea", "4", 163);
+
+        ImportService.Apply(row, Card("Battle Styles", "4", 163));
+
+        Assert.Equal(ImportStatus.Matched, row.Status);
+    }
+}
