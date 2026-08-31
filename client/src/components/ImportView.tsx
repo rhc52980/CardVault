@@ -411,9 +411,33 @@ export function ImportView({ onImported }: { onImported: () => void }) {
 
         {job.error && <p className="rounded-lg bg-rose/10 px-4 py-3 text-sm text-rose">{job.error}</p>}
         {error && <p className="rounded-lg bg-rose/10 px-4 py-3 text-sm text-rose">{error}</p>}
-        {job.unmappedColumns.length > 0 && (
+        {/*
+          Two lists, because they warrant very different attention. Ignoring a column
+          called Rarity is expected and belongs in grey; ignoring one called Set_Number
+          means every row below resolved on its name alone and the numbers you supplied
+          were never read. That happened, quietly, for a whole batch — the warning was
+          there, in the same grey line as three columns that were meant to be ignored.
+        */}
+        {job.suspiciousColumns.length > 0 && (
+          <div className="rounded-lg border border-gold/40 bg-gold/10 px-4 py-3 text-sm">
+            <p className="text-bright">
+              {job.suspiciousColumns.join(', ')} {job.suspiciousColumns.length === 1 ? 'was' : 'were'}{' '}
+              not recognised, so {job.suspiciousColumns.length === 1 ? 'it was' : 'they were'} ignored.
+            </p>
+            <p className="mt-1 text-xs text-mute">
+              That name looks like something this import wants. Check the matches below before
+              committing them — a number that isn't read can't stop a row matching the wrong
+              printing of the right card. Renaming the column to{' '}
+              <span className="text-bright">Number</span>, <span className="text-bright">Name</span>{' '}
+              or <span className="text-bright">Set</span> will fix it.
+            </p>
+          </div>
+        )}
+
+        {job.unmappedColumns.length > job.suspiciousColumns.length && (
           <p className="text-xs text-mute">
-            Ignored unrecognised columns: {job.unmappedColumns.join(', ')}
+            Ignored unrecognised columns:{' '}
+            {job.unmappedColumns.filter((c) => !job.suspiciousColumns.includes(c)).join(', ')}
           </p>
         )}
 

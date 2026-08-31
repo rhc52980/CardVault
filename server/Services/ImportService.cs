@@ -33,7 +33,15 @@ public sealed class ImportService(
         ["setId"] = ["setid", "set id", "set code id"],
         ["setCode"] = ["setcode", "set code", "ptcgo code", "ptcgocode", "set abbreviation", "abbr"],
         ["setName"] = ["set", "set name", "setname", "edition", "expansion"],
-        ["number"] = ["number", "card number", "cardnumber", "collector number", "collectornumber", "no", "#"],
+        // "set number" is here because that is what a card's collector number is
+        // routinely called — it is the number *within* the set, and several exporters
+        // and the scanning pipeline label it that way. Its absence meant a column
+        // headed Set_Number was quietly ignored and every row resolved on name alone,
+        // which is how a file that named the right card imported the wrong printing.
+        ["number"] = [
+            "number", "card number", "cardnumber", "collector number", "collectornumber",
+            "set number", "setnumber", "set no", "card no", "cardno", "no", "num", "#",
+        ],
         ["quantity"] = ["quantity", "qty", "count", "amount", "copies"],
         ["variant"] = ["variant", "printing", "finish", "foil", "edition type", "parallel"],
         ["condition"] = ["condition", "cond", "grade condition"],
@@ -49,6 +57,34 @@ public sealed class ImportService(
     /// A job, but only to the collection it belongs to. Jobs are held in one place
     /// for the whole process, and another vault has no business reading this one.
     /// </summary>
+    /// <summary>
+    /// Whether an ignored column name reads like one of the fields that matter. Aimed
+    /// at the header the importer nearly understood rather than at anything exotic:
+    /// the failure worth shouting about is a column you assumed was being read.
+    /// </summary>
+    internal static bool LooksImportant(string column)
+    {
+        var c = column.Trim().ToLowerInvariant().Replace("_", " ").Replace("-", " ");
+
+        // What the qualifier is about decides it, not the keyword. "File_Name" and
+        // "Set_Number" both carry one; only the second is describing the card. Without
+        // this, a scan file's own columns trip the warning on every import and it
+        // becomes the grey line it was meant to replace.
+        // Matched on where a word starts, not anywhere inside one: "paid" contains
+        // "id", and a Price Paid column is exactly the sort this should be catching.
+        // Starts-with rather than equality so "filename" is still recognised unsplit.
+        string[] notAboutTheCard = ["file", "image", "photo", "scan", "path", "folder",
+                                    "directory", "url", "link", "row", "index", "id"];
+        var words = c.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (words.Any(w => notAboutTheCard.Any(w.StartsWith))) return false;
+
+        string[] fields = ["number", "name", "set", "qty", "quantity", "count", "price",
+                           "paid", "cost", "condition", "grade", "language", "variant",
+                           "printing", "finish", "foil"];
+
+        return fields.Any(f => c.Contains(f));
+    }
+
     public ImportJob? Get(string id)
         => _jobs.GetValueOrDefault(id) is { } job && job.Vault == Data.CurrentVault.Id ? job : null;
 
@@ -71,6 +107,15 @@ public sealed class ImportService(
 
         var (map, unmapped) = MapColumns(rows[0]);
         job.UnmappedColumns = unmapped;
+
+        // Columns that read like something the importer wants but did not match an
+        // alias. Ignoring a column called Rarity is fine and expected; ignoring one
+        // called Set_Number is how a whole batch resolves on the card's name and
+        // imports the wrong printings — and buried in a grey list beside three
+        // legitimately ignored columns, nobody sees it.
+        job.SuspiciousColumns = unmapped
+            .Where(c => LooksImportant(c))
+            .ToList();
 
         if (map.Count == 0)
         {
@@ -127,7 +172,7 @@ public sealed class ImportService(
 
     // ------------------------------------------------------------------ mapping
 
-    private static (Dictionary<string, int> Map, List<string> Unmapped) MapColumns(string[] header)
+    internal static (Dictionary<string, int> Map, List<string> Unmapped) MapColumns(string[] header)
     {
         var map = new Dictionary<string, int>();
         var unmapped = new List<string>();
@@ -620,8 +665,74 @@ public sealed class ImportService(
         row.Status = ImportStatus.Matched;
         row.Candidates = Alternatives(card, alsoMatched);
 
+        // A lookup that comes back with exactly one card skips narrowing entirely —
+        // there is nothing to choose between — so nothing checks that the one card is
+        // the one the file described. A row reading "Gastly, Crimson Invasion, 36/111"
+        // matched Crocalor #36 from Paldea Evolved and reported it settled.
+        //
+        // The name still has to give way to the number, because a misread name is the
+        // ordinary case and "Grimmsnari" must not hide Grimmsnarl. But a name that
+        // isn't a misreading of the answer is a contradiction, and a contradiction
+        // belongs in front of you rather than in the collection.
+        if (!string.IsNullOrWhiteSpace(row.ClaimedName) && !NamesAgree(row.ClaimedName, card.Name))
+        {
+            row.Status = ImportStatus.Mismatch;
+            row.Message = $"The file says {row.ClaimedName.Trim()}; the card found at this "
+                        + $"number is {card.Name}.";
+            return;
+        }
+
         if (!string.Equals(row.Variant, wanted, StringComparison.Ordinal))
             row.Message = $"No '{wanted}' printing — using '{row.Variant}'.";
+    }
+
+    /// <summary>
+    /// Whether two card names are plausibly the same card. Generous on purpose: the
+    /// names in these files come off scans and out of typing, and the cost of being
+    /// strict is an import that queries you about every third row.
+    ///
+    /// Containment covers the real prefixes — a file saying "Purrloin" for "N's
+    /// Purrloin" is describing that card, not contradicting it. The edit-distance
+    /// allowance covers the misreadings, and scales with length so short names stay
+    /// tight: two edits turns Gastly into half the Pokédex.
+    /// </summary>
+    internal static bool NamesAgree(string? claimed, string? actual)
+    {
+        var a = Simplify(claimed);
+        var b = Simplify(actual);
+
+        if (a.Length == 0 || b.Length == 0) return true;
+        if (a == b) return true;
+        if (a.Length >= 4 && b.Length >= 4 && (a.Contains(b) || b.Contains(a))) return true;
+
+        var allowed = Math.Max(1, Math.Min(a.Length, b.Length) / 5);
+
+        return Distance(a, b) <= allowed;
+    }
+
+    /// <summary>Punctuation, spacing and case are not differences between cards.</summary>
+    private static string Simplify(string? s)
+        => new([.. (s ?? "").ToLowerInvariant().Where(char.IsLetterOrDigit)]);
+
+    private static int Distance(string a, string b)
+    {
+        var previous = new int[b.Length + 1];
+        var current = new int[b.Length + 1];
+        for (var j = 0; j <= b.Length; j++) previous[j] = j;
+
+        for (var i = 1; i <= a.Length; i++)
+        {
+            current[0] = i;
+            for (var j = 1; j <= b.Length; j++)
+            {
+                var substitute = previous[j - 1] + (a[i - 1] == b[j - 1] ? 0 : 1);
+                current[j] = Math.Min(Math.Min(current[j - 1] + 1, previous[j] + 1), substitute);
+            }
+
+            (previous, current) = (current, previous);
+        }
+
+        return previous[b.Length];
     }
 
     /// <summary>
