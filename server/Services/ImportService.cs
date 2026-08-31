@@ -244,6 +244,7 @@ public sealed class ImportService(
         // overwriting the row with a matched card's details.
         row.ClaimedName = row.Name;
         row.ClaimedNumber = row.Number;
+        row.ClaimedPrintedTotal = row.PrintedTotal;
         return row;
     }
 
@@ -335,7 +336,13 @@ public sealed class ImportService(
             var cached = Narrow(
                 cache.FindPayloads(setId, row.Number, cacheName).Select(ToCandidate).ToList(), row);
 
-            if (cached.Count == 1)
+            // A contradicted answer does not get to end the search. The cache holds
+            // whatever has been seen before, which is a shortcut and not an authority:
+            // if its one card disagrees with the file, the catalogue below knows about
+            // every card rather than the ones that happened to come up, and is the
+            // better place to be asking. Stopping here is how a row asking for 4/163
+            // settled on a Cacnea from a 72-card set that was merely already cached.
+            if (cached.Count == 1 && !Contradicts(row, cached[0]))
             {
                 Apply(row, cached[0]);
                 return;
@@ -356,7 +363,11 @@ public sealed class ImportService(
                                      .Select(ToCandidate).ToList();
                 var offline = Narrow(found, row);
 
-                if (offline.Count == 1)
+                // Same rule one source down, and for the same reason: the catalogue is
+                // complete but it is not current, so a single answer that disagrees
+                // with the file is worth one more question to the network before it is
+                // treated as settled.
+                if (offline.Count == 1 && !Contradicts(row, offline[0]))
                 {
                     Apply(row, offline[0], found);
                     return;
@@ -674,16 +685,50 @@ public sealed class ImportService(
         // ordinary case and "Grimmsnari" must not hide Grimmsnarl. But a name that
         // isn't a misreading of the answer is a contradiction, and a contradiction
         // belongs in front of you rather than in the collection.
-        if (!string.IsNullOrWhiteSpace(row.ClaimedName) && !NamesAgree(row.ClaimedName, card.Name))
+        if (Contradicts(row, card))
         {
             row.Status = ImportStatus.Mismatch;
-            row.Message = $"The file says {row.ClaimedName.Trim()}; the card found at this "
-                        + $"number is {card.Name}.";
+            row.Message = Contradiction(row, card);
             return;
         }
 
         if (!string.Equals(row.Variant, wanted, StringComparison.Ordinal))
             row.Message = $"No '{wanted}' printing — using '{row.Variant}'.";
+    }
+
+    /// <summary>
+    /// Whether the card found disagrees with what the file said, on either of the two
+    /// things a file can be trusted about.
+    ///
+    /// Both are read off fixed spots on the card, and both are things the narrowing
+    /// gives up rather than answering "no" — reasonably, since a misread denominator
+    /// should widen the search instead of emptying it. What was missing is that giving
+    /// one up is not the same as it having been satisfied. Every filter here also stops
+    /// at a single candidate, on the grounds that there is nothing to choose between,
+    /// so one card arriving from anywhere was applied without either being looked at.
+    /// A cached Cacnea #4 from Shining Fates answered a row asking for 4/163.
+    /// </summary>
+    internal static bool Contradicts(ImportRow row, CardCandidate card)
+    {
+        if (!string.IsNullOrWhiteSpace(row.ClaimedName) && !NamesAgree(row.ClaimedName, card.Name))
+            return true;
+
+        // Only when the card's own denominator is known. An unknown one is silence,
+        // and silence is not disagreement.
+        return row.ClaimedPrintedTotal is { } wanted
+            && card.PrintedTotal is { } actual
+            && actual != wanted;
+    }
+
+    /// <summary>Says which of the two disagreed, in the file's own terms.</summary>
+    private static string Contradiction(ImportRow row, CardCandidate card)
+    {
+        if (!string.IsNullOrWhiteSpace(row.ClaimedName) && !NamesAgree(row.ClaimedName, card.Name))
+            return $"The file says {row.ClaimedName.Trim()}; the card found at this number "
+                 + $"is {card.Name}.";
+
+        return $"The file says {row.ClaimedNumber}/{row.ClaimedPrintedTotal}; this card is "
+             + $"{card.Number}/{card.PrintedTotal} in {card.SetName}.";
     }
 
     /// <summary>
