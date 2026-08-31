@@ -79,6 +79,12 @@ public sealed class ImportRow
 
     public string? ClaimedNumber { get; set; }
 
+    /// <summary>
+    /// The denominator the file gave, kept apart from <see cref="PrintedTotal"/> so a
+    /// matched card can never quietly become its own evidence.
+    /// </summary>
+    public int? ClaimedPrintedTotal { get; set; }
+
     public string? Rarity { get; set; }
     public string? ImageSmall { get; set; }
     public double? MarketPrice { get; set; }
