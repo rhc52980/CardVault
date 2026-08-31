@@ -580,6 +580,8 @@ export interface ImportJob {
   processed: number
   error?: string | null
   unmappedColumns: string[]
+  /** Ignored columns that read like something the importer wants. */
+  suspiciousColumns: string[]
   rows: ImportRow[]
 }
 

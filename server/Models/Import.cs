@@ -121,6 +121,12 @@ public sealed class ImportJob
     public int Processed { get; set; }
     public string? Error { get; set; }
     public List<string> UnmappedColumns { get; set; } = [];
+
+    /// <summary>
+    /// Ignored columns whose names read like something the importer wants. Called out
+    /// loudly rather than listed in grey beside the ones you meant to ignore.
+    /// </summary>
+    public List<string> SuspiciousColumns { get; set; } = [];
     public List<ImportRow> Rows { get; set; } = [];
     public DateTime CreatedAt { get; init; } = DateTime.UtcNow;
 }
