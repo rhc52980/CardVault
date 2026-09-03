@@ -8,7 +8,8 @@ import {
   languageTag,
   rarityClass,
 } from '../lib/cardStyles'
-import { ADDED_WINDOWS, addedWithin, whenAdded } from '../lib/dates'
+import { ADDED_WINDOWS, CUSTOM_WINDOW, addedBetween, addedWithin, whenAdded } from '../lib/dates'
+import { matchesVaultQuery, parseVaultQuery } from '../lib/vaultSearch'
 import type { CollectionItem, ImportBatchSummary } from '../types'
 import { ConfirmButton } from './ConfirmButton'
 import { FriendsView } from './FriendsView'
@@ -61,6 +62,11 @@ export function CollectionView({
   // came in on a CSV; one added by hand belongs to no batch, and this is the only
   // handle there is on those.
   const [addedFilter, setAddedFilter] = useState('')
+  // Only meaningful while the custom window is chosen. Kept rather than cleared when
+  // you switch away, so flicking to "in 7 days" and back doesn't lose the dates you
+  // just typed.
+  const [addedFrom, setAddedFrom] = useState('')
+  const [addedTo, setAddedTo] = useState('')
   const [batchFilter, setBatchFilter] = useState('')
   const [batches, setBatches] = useState<ImportBatchSummary[]>([])
   // Only ever read for the count on the tab. A card reaching your price is the one
@@ -150,18 +156,11 @@ export function CollectionView({
   )
 
   const visible = useMemo(() => {
-    const term = filter.trim().toLowerCase()
     let out = items
 
-    if (term) {
-      out = out.filter(
-        (i) =>
-          i.name.toLowerCase().includes(term) ||
-          i.setName?.toLowerCase().includes(term) ||
-          i.rarity?.toLowerCase().includes(term) ||
-          i.number?.toLowerCase().includes(term) ||
-          i.location?.toLowerCase().includes(term),
-      )
+    if (filter.trim()) {
+      const query = parseVaultQuery(filter)
+      out = out.filter((i) => matchesVaultQuery(i, query))
     }
 
     if (kind === 'cards') out = out.filter((i) => !i.isCustom)
@@ -172,7 +171,14 @@ export function CollectionView({
     if (gradedFilter === 'graded') out = out.filter((i) => !!i.grade)
     else if (gradedFilter === 'raw') out = out.filter((i) => !i.grade)
     if (flaggedOnly) out = out.filter((i) => !!i.flagged)
-    if (addedFilter) out = out.filter((i) => addedWithin(i.addedAt, Number(addedFilter)))
+    if (addedFilter === CUSTOM_WINDOW) {
+      // An empty range is not a filter for nothing, it's a filter you haven't
+      // filled in yet — showing an empty collection until you do would read as a
+      // collection that lost its cards.
+      if (addedFrom || addedTo) out = out.filter((i) => addedBetween(i.addedAt, addedFrom, addedTo))
+    } else if (addedFilter) {
+      out = out.filter((i) => addedWithin(i.addedAt, addedFilter))
+    }
     if (batchFilter) out = out.filter((i) => i.importBatch === batchFilter)
     if (locationFilter) {
       out =
@@ -198,7 +204,7 @@ export function CollectionView({
       }
     })
     return sorted
-  }, [items, filter, setFilter_, languageFilter, gradedFilter, flaggedOnly, addedFilter, locationFilter, batchFilter, sort, kind])
+  }, [items, filter, setFilter_, languageFilter, gradedFilter, flaggedOnly, addedFilter, addedFrom, addedTo, locationFilter, batchFilter, sort, kind])
 
   // Entries a scan comparison disagreed with. Counted over everything you own, not
   // the current view, so narrowing a filter can't make the number look better.
@@ -479,7 +485,7 @@ export function CollectionView({
         <input
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
-          placeholder="Filter your collection…"
+          placeholder="Search your collection — Purrloin, 106/189, base set 2…"
           className={`${control} min-w-[200px] flex-1`}
         />
 
@@ -564,7 +570,30 @@ export function CollectionView({
               {w.label}
             </option>
           ))}
+          <option value={CUSTOM_WINDOW}>Added between…</option>
         </select>
+
+        {addedFilter === CUSTOM_WINDOW && (
+          <div className="flex items-center gap-1.5">
+            <input
+              type="date"
+              value={addedFrom}
+              max={addedTo || undefined}
+              onChange={(e) => setAddedFrom(e.target.value)}
+              className={control}
+              aria-label="Added on or after"
+            />
+            <span className="text-sm text-mute">to</span>
+            <input
+              type="date"
+              value={addedTo}
+              min={addedFrom || undefined}
+              onChange={(e) => setAddedTo(e.target.value)}
+              className={control}
+              aria-label="Added on or before"
+            />
+          </div>
+        )}
 
         {batches.length > 0 && (
           <select
