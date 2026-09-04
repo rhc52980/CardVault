@@ -345,9 +345,15 @@ export const api = {
     return (await res.json()) as { removed: number }
   },
 
-  /** Starts a refresh; poll refreshProgress for how it's getting on. */
-  refreshPrices() {
-    return fetch('/api/prices/snapshot', { method: 'POST' }).then(json<PriceRefreshProgress>)
+  /**
+   * Starts a refresh; poll refreshProgress for how it's getting on.
+   *
+   * `onlyMissing` limits it to cards with no recorded price, which after an import is
+   * the few that arrived without one — seconds rather than the full sweep's minutes.
+   */
+  refreshPrices(onlyMissing = false) {
+    const query = onlyMissing ? '?onlyMissing=true' : ''
+    return fetch(`/api/prices/snapshot${query}`, { method: 'POST' }).then(json<PriceRefreshProgress>)
   },
 
   refreshProgress() {

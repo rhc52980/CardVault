@@ -1088,16 +1088,22 @@ app.MapPut("/api/prices/sources/preferred", (
 // Starts a refresh and returns immediately. Refreshing is one API call per card
 // with pacing between them, so a large collection takes minutes — long enough that
 // awaiting it here would just time the request out.
-app.MapPost("/api/prices/snapshot", (PriceSnapshotService snapshots) =>
+// `onlyMissing` limits the sweep to cards with no recorded price. After an import
+// that is the handful that arrived without one, and it finishes in seconds where
+// the full run takes minutes.
+app.MapPost("/api/prices/snapshot", (PriceSnapshotService snapshots, bool? onlyMissing) =>
 {
-    if (!snapshots.StartRefresh())
+    if (!snapshots.StartRefresh(onlyMissing ?? false))
         return Results.Conflict(new { error = "A price refresh is already running." });
 
     return Results.Accepted("/api/prices/snapshot", snapshots.RefreshProgress);
 });
 
+// The unpriced count is read here rather than carried on the progress record: it
+// changes when cards are added, not when a refresh advances, so anything holding a
+// copy would have to remember to invalidate it.
 app.MapGet("/api/prices/snapshot", (PriceSnapshotService snapshots)
-    => Results.Ok(snapshots.RefreshProgress));
+    => Results.Ok(snapshots.RefreshProgress with { Unpriced = snapshots.UnpricedCount() }));
 
 // -------------------------------------------------------------- CSV bulk import
 

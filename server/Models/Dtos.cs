@@ -269,7 +269,19 @@ public sealed record PriceRefreshProgress(
     string? Detail,
     string? Error,
     /// <summary>When the last run ended, so the UI can say "done" rather than just stopping.</summary>
-    string? FinishedAt);
+    string? FinishedAt,
+    /// <summary>
+    /// True when this run is only filling in cards that have no price yet, so the UI
+    /// can say which of the two is happening. A gap-filling run after an import takes
+    /// seconds where the full sweep takes minutes, and the two are worth telling apart
+    /// while you are waiting on one.
+    /// </summary>
+    bool OnlyMissing = false,
+    /// <summary>
+    /// How many owned cards have no recorded price for the chosen source. Reported so
+    /// the button can name the number and disappear when there is nothing to fill in.
+    /// </summary>
+    int Unpriced = 0);
 
 public sealed record ToggleRequest(bool Enabled);
 

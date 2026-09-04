@@ -449,6 +449,10 @@ export interface PriceRefreshProgress {
   detail?: string | null
   error?: string | null
   finishedAt?: string | null
+  /** True when the run in flight is only filling in cards that have no price. */
+  onlyMissing: boolean
+  /** Owned cards with no recorded price for the chosen source. */
+  unpriced: number
 }
 
 export interface CatalogueStatus {
