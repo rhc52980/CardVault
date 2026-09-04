@@ -18,6 +18,11 @@ public sealed class PriceSnapshotService(
     PokemonTcgClient api,
     CardCache cache,
     IEnumerable<IPriceSource> sources,
+    // Only for knowing which source's prices are the ones on screen. Every registered
+    // source is asked about every card, but a gap is a gap in the figure you are
+    // actually shown: a card with an eBay price and no TCGplayer one still reads as
+    // unpriced in a vault set to TCGplayer.
+    SettingsService settings,
     // Resolved lazily rather than injected: wants are refreshed as a consequence of a
     // capture, not something a capture needs in order to run, and taking the service
     // directly would tie this one's construction to a chain it has no business in.
@@ -42,17 +47,17 @@ public sealed class PriceSnapshotService(
     /// concurrent sweeps would double the API load to reach the same answer, and the
     /// daily timer can be part-way through one at any moment.
     /// </summary>
-    public bool StartRefresh()
+    public bool StartRefresh(bool onlyMissing = false)
     {
         lock (_refreshLock)
         {
             if (_refresh.Running) return false;
-            _refresh = new PriceRefreshProgress(true, 0, 0, "Starting", null, null);
+            _refresh = new PriceRefreshProgress(true, 0, 0, "Starting", null, null, onlyMissing);
         }
 
         _ = Task.Run(async () =>
         {
-            try { await CaptureAsync(CancellationToken.None); }
+            try { await CaptureAsync(CancellationToken.None, onlyMissing); }
             catch (Exception e) { log.LogError(e, "Manual price refresh failed"); }
         }, CancellationToken.None);
 
@@ -168,14 +173,14 @@ public sealed class PriceSnapshotService(
     /// Re-fetches every owned card and writes today's prices. Safe to call repeatedly —
     /// the snapshot table is keyed by day, so a second run just overwrites today.
     /// </summary>
-    public async Task<int> CaptureAsync(CancellationToken ct)
+    public async Task<int> CaptureAsync(CancellationToken ct, bool onlyMissing = false)
     {
-        var cardIds = OwnedCardIds();
+        var cardIds = onlyMissing ? UnpricedCardIds() : OwnedCardIds();
 
         // Progress is tracked here rather than in the caller so the daily run reports
         // itself too — otherwise the UI would show "idle" while the timer was part-way
         // through a sweep, and pressing refresh would look like it did nothing.
-        _refresh = new PriceRefreshProgress(true, 0, cardIds.Count, null, null, null);
+        _refresh = new PriceRefreshProgress(true, 0, cardIds.Count, null, null, null, onlyMissing);
 
         if (cardIds.Count == 0)
         {
@@ -422,6 +427,74 @@ public sealed class PriceSnapshotService(
         using var r = cmd.ExecuteReader();
         while (r.Read()) ids.Add(r.GetString(0));
         return ids;
+    }
+
+    /// <summary>
+    /// The owned cards that have no price recorded for the chosen source.
+    ///
+    /// Worth its own sweep because the full one is an API call per card with pacing
+    /// between them, so a few thousand cards take minutes — and after an import the
+    /// handful that arrived without a price are the only ones you are waiting on.
+    /// Cards added straight from the offline catalogue come in unpriced by design:
+    /// the add never touches the network so it cannot fail, and a background fetch
+    /// catches up afterwards. When that fetch doesn't land, this is how you ask again
+    /// without re-pricing everything you already have.
+    ///
+    /// A row whose market is null is not a price. That is how the marketplace sources
+    /// record "asked, got nothing", and a card in that state still has a gap to fill.
+    /// </summary>
+    private List<string> UnpricedCardIds()
+    {
+        using var conn = db.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = """
+            SELECT DISTINCT o.card_id FROM (
+                SELECT c.card_id AS card_id FROM collection c
+                UNION
+                SELECT w.card_id FROM wants w
+            ) o
+            WHERE NOT EXISTS (
+                SELECT 1 FROM price_history p
+                WHERE p.card_id = o.card_id
+                  AND p.source = $source
+                  AND p.market IS NOT NULL
+            )
+            """;
+        cmd.Parameters.AddWithValue("$source", settings.PreferredPriceSource);
+
+        var ids = new List<string>();
+        using var r = cmd.ExecuteReader();
+        while (r.Read()) ids.Add(r.GetString(0));
+        return ids;
+    }
+
+    /// <summary>
+    /// How many cards a gap-filling run would touch. Read on demand rather than kept
+    /// alongside the progress, so it is right after an import without anything having
+    /// to remember to invalidate it.
+    /// </summary>
+    public int UnpricedCount()
+    {
+        using var conn = db.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = """
+            SELECT COUNT(*) FROM (
+                SELECT DISTINCT o.card_id FROM (
+                    SELECT c.card_id AS card_id FROM collection c
+                    UNION
+                    SELECT w.card_id FROM wants w
+                ) o
+                WHERE NOT EXISTS (
+                    SELECT 1 FROM price_history p
+                    WHERE p.card_id = o.card_id
+                      AND p.source = $source
+                      AND p.market IS NOT NULL
+                )
+            )
+            """;
+        cmd.Parameters.AddWithValue("$source", settings.PreferredPriceSource);
+
+        return Convert.ToInt32(cmd.ExecuteScalar());
     }
 
     private void RecordSnapshot(string cardId, string variant, string source, string currency, string day, PriceSet p)

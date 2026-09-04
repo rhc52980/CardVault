@@ -45,10 +45,10 @@ export function PriceRefreshButton({
     wasRunning.current = running
   }, [running, onFinished])
 
-  async function start() {
+  async function start(onlyMissing = false) {
     setBusy(true)
     try {
-      setProgress(await api.refreshPrices())
+      setProgress(await api.refreshPrices(onlyMissing))
     } catch {
       // A 409 means the daily run beat us to it, which is not worth an error.
       await load()
@@ -57,15 +57,35 @@ export function PriceRefreshButton({
     }
   }
 
+  const unpriced = progress?.unpriced ?? 0
+
   return (
     <div className="flex flex-wrap items-center gap-3">
       <button
-        onClick={start}
+        onClick={() => void start()}
         disabled={busy || running}
         className="rounded-lg border border-edge px-3 py-1.5 text-sm text-bright transition hover:border-arc disabled:opacity-40"
       >
-        {running ? 'Refreshing prices…' : 'Refresh prices'}
+        {running ? (progress?.onlyMissing ? 'Filling in prices…' : 'Refreshing prices…') : 'Refresh prices'}
       </button>
+
+      {/*
+        Offered only when there is a gap to fill, and it names the number, so the
+        button is its own explanation and takes no room on a collection that is
+        fully priced. The full sweep is an API call per card with pacing between
+        them — minutes on a few thousand cards — where this is usually the handful
+        an import just brought in.
+      */}
+      {unpriced > 0 && !running && (
+        <button
+          onClick={() => void start(true)}
+          disabled={busy}
+          className="rounded-lg border border-edge px-3 py-1.5 text-sm text-mute transition hover:border-arc hover:text-bright disabled:opacity-40"
+          title="Only asks about cards with no price yet, rather than re-pricing the whole collection"
+        >
+          Fill in {unpriced.toLocaleString()} missing
+        </button>
+      )}
 
       {running ? (
         <span className="text-xs text-mute tabular-nums">
