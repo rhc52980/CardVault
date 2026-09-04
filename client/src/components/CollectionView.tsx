@@ -210,6 +210,67 @@ export function CollectionView({
   // the current view, so narrowing a filter can't make the number look better.
   const flaggedCount = useMemo(() => items.filter((i) => i.flagged).length, [items])
 
+  /**
+   * The filters currently hiding things, named so they can be seen and undone.
+   *
+   * Every one of these lives in a separate control, several of them scrolled off
+   * to the right, and between them they can empty the grid with no single thing on
+   * screen accounting for it. The case that prompted this: filter to what arrived
+   * today, then press "All" — which means all *kinds*, cards and sealed together,
+   * not "stop filtering" — and the count doesn't move. Reloading appeared to fix
+   * it, because the date window isn't remembered across a reload while the kind
+   * toggle is, which makes the whole thing look like a bug in the grid.
+   *
+   * `kind` is deliberately not in here. It is a remembered preference with its own
+   * labelled, always-visible toggle, and clearing a filter should not quietly
+   * change what you chose to browse.
+   */
+  const active = useMemo(() => {
+    const on: { label: string; clear: () => void }[] = []
+
+    if (filter.trim()) on.push({ label: `“${filter.trim()}”`, clear: () => setFilter('') })
+    if (setFilter_) {
+      const name = sets.find(([id]) => id === setFilter_)?.[1] ?? 'one set'
+      on.push({ label: name, clear: () => setSetFilter('') })
+    }
+    if (languageFilter)
+      on.push({ label: languageName(languageFilter), clear: () => setLanguageFilter('') })
+    if (gradedFilter)
+      on.push({
+        label: gradedFilter === 'graded' ? 'graded only' : 'raw only',
+        clear: () => setGradedFilter(''),
+      })
+    if (flaggedOnly) on.push({ label: 'flagged only', clear: () => setFlaggedOnly(false) })
+    if (addedFilter) {
+      const label =
+        addedFilter === CUSTOM_WINDOW
+          ? 'a date range'
+          : (ADDED_WINDOWS.find((w) => w.key === addedFilter)?.label ?? 'when added')
+      on.push({ label: label.toLowerCase(), clear: () => setAddedFilter('') })
+    }
+    if (batchFilter) on.push({ label: 'one import', clear: () => setBatchFilter('') })
+    if (locationFilter)
+      on.push({
+        label: locationFilter === '__none__' ? 'no location' : locationFilter,
+        clear: () => setLocationFilter(''),
+      })
+
+    return on
+  }, [filter, setFilter_, sets, languageFilter, gradedFilter, flaggedOnly, addedFilter, batchFilter, locationFilter])
+
+  function clearFilters() {
+    setFilter('')
+    setSetFilter('')
+    setLanguageFilter('')
+    setGradedFilter('')
+    setFlaggedOnly(false)
+    setAddedFilter('')
+    setAddedFrom('')
+    setAddedTo('')
+    setBatchFilter('')
+    setLocationFilter('')
+  }
+
   const ownedForDetail = detailCardId ? items.filter((i) => i.cardId === detailCardId) : []
 
   /**
@@ -644,10 +705,40 @@ export function CollectionView({
           onApply={applyToSelection}
         />
       ) : (
-        <p className="text-sm text-mute">
-          {visible.length.toLocaleString()} of {items.length.toLocaleString()} entries ·{' '}
-          <span className="text-gold tabular-nums">{money(visibleValue)}</span> shown
-        </p>
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-mute">
+          <p>
+            {visible.length.toLocaleString()} of {items.length.toLocaleString()} entries ·{' '}
+            <span className="text-gold tabular-nums">{money(visibleValue)}</span> shown
+          </p>
+
+          {/* Named individually rather than as one "filters are on" note: knowing
+              that something is hiding cards is only half of it, and the half that
+              doesn't tell you which control to go and find. */}
+          {active.length > 0 && (
+            <>
+              <span className="text-mute/60">·</span>
+              <span>filtered by</span>
+              {active.map((a) => (
+                <button
+                  key={a.label}
+                  onClick={a.clear}
+                  className="rounded-md border border-edge px-2 py-0.5 text-xs text-bright transition hover:border-arc"
+                  title="Remove this filter"
+                >
+                  {a.label} <span className="text-mute">×</span>
+                </button>
+              ))}
+              {active.length > 1 && (
+                <button
+                  onClick={clearFilters}
+                  className="text-xs text-mute underline underline-offset-2 transition hover:text-bright"
+                >
+                  clear all
+                </button>
+              )}
+            </>
+          )}
+        </div>
       )}
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6">
