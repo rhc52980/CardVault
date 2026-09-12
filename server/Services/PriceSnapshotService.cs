@@ -27,7 +27,13 @@ public sealed class PriceSnapshotService(
     // capture, not something a capture needs in order to run, and taking the service
     // directly would tie this one's construction to a chain it has no business in.
     IServiceProvider services,
-    ILogger<PriceSnapshotService> log) : BackgroundService
+    ILogger<PriceSnapshotService> log,
+    // Piggybacked on this loop rather than given its own: it is opt-in and
+    // rate-limited to once a day internally, so it only needs somewhere that
+    // already runs once a day on its own. Before this it only ran when someone
+    // happened to open Settings, so a vault nobody looked at for a week never
+    // checked at all.
+    UpdateChecker updates) : BackgroundService
 {
     private static readonly TimeSpan Interval = TimeSpan.FromHours(24);
 
@@ -163,6 +169,11 @@ public sealed class PriceSnapshotService(
             {
                 log.LogError(e, "Price snapshot failed; will retry on the next cycle");
             }
+
+            // Opt-in, at most once a day, and every failure is swallowed inside
+            // it: an update check must never be the thing that stops prices
+            // from capturing.
+            await updates.MaybeCheckAsync(ct);
 
             try { await Task.Delay(Interval, ct); }
             catch (OperationCanceledException) { break; }
