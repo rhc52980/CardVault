@@ -48,6 +48,8 @@ public sealed class UnpricedTests : IDisposable
         var settings = new SettingsService(_db, config);
         settings.PreferredPriceSource = "tcgplayer";
 
+        var provider = new ServiceCollection().AddHttpClient().BuildServiceProvider();
+
         // Nothing here goes near the network: the queries under test only read what
         // is already on disk.
         _snapshots = new PriceSnapshotService(
@@ -56,8 +58,14 @@ public sealed class UnpricedTests : IDisposable
             new CardCache(_db),
             [],
             settings,
-            new ServiceCollection().BuildServiceProvider(),
-            NullLogger<PriceSnapshotService>.Instance);
+            provider,
+            NullLogger<PriceSnapshotService>.Instance,
+            new UpdateChecker(
+                provider.GetRequiredService<IHttpClientFactory>(),
+                settings,
+                config,
+                NullLogger<UpdateChecker>.Instance,
+                "1.0.0-test"));
     }
 
     public void Dispose()
