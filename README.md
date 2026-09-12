@@ -188,9 +188,11 @@ would turn a quick safety copy into a slow one. Keep your originals.
 ## Finding what you added recently
 
 Every entry records when it arrived, and the vault shows it — "added today", "added
-3 days ago", a date once it's older. An **Added** filter in the toolbar narrows to the
-last day, week, month or quarter, and picking one sorts newest first, because that's
-what you meant by asking.
+3 days ago", a date once it's older. An **Added** filter in the toolbar offers today,
+3, 7, 30 or 90 days, or **Added between…** for a specific range — either end can be
+left blank, so "since March" and "up to March" are both answerable without the other
+half you don't care about. Picking a window sorts newest first, because that's what
+you meant by asking.
 
 The line above the grid then answers the question worth asking: **how many cards
 arrived in that window and what they're worth**. Filter to the last 7 days and the
@@ -199,6 +201,13 @@ total shown is the value of everything you added this week.
 This is the counterpart to the import filter beside it. That one groups cards by the
 CSV they came in on, which is no use for a card added one at a time — those belong to
 no batch, and the date is the only handle on them.
+
+**Every active filter is named below the count**, each as its own button — click one
+to drop it, or **clear all** once more than one is on. Nine different controls can
+narrow the grid and several sit off-screen, so a filter you've forgotten about can
+otherwise look like a bug: "the vault is stuck showing three cards" is usually a
+filter, not a fault, and this is what makes that visible instead of leaving you to
+reload the page.
 
 ## Editing a lot of cards at once
 
@@ -305,6 +314,22 @@ for lightness, chroma, colourblind separation and contrast against the chart
 surface rather than picked by eye. A card with more than four priced printings
 shows the first four and says so.
 
+## Refreshing prices
+
+Prices refresh automatically once a day. **Refresh prices**, on the dashboard and in
+**Settings**, asks for a fresh sweep right now — one API call per card with pacing
+between them, so a few thousand cards takes minutes.
+
+When some of those cards already have a price, a second button appears: **Fill in N
+missing**, naming the count. It asks only about the cards with no recorded price for
+your chosen source — after an import that's the handful that arrived without one,
+and it's usually done in seconds rather than minutes. It only shows up when there's a
+gap to fill, and disappears again once there isn't.
+
+Some cards may never get a price no matter how often you ask — the API simply has
+none for them — and the count can settle above zero rather than reaching it. That's
+the source telling you it has nothing, not the app failing to ask.
+
 ## Selling, and the sold ledger
 
 When a card sells, use **Sell** on it rather than Remove. Remove deletes it
@@ -388,10 +413,10 @@ said.
 This matters most for sealed product, which usually has no other price at all —
 eBay asking prices need configuring, and nothing else quotes a booster box.
 
-## Searching
+## Searching the catalogue
 
-The search box reads what you typed rather than assuming everything is a name,
-which matters when you're working through a physical stack:
+The search box on **Add cards** reads what you typed rather than assuming everything
+is a name, which matters when you're working through a physical stack:
 
 | You type | What it searches |
 | --- | --- |
@@ -407,6 +432,25 @@ total and the API can filter on it directly.
 
 A name that ends in a digit (`Porygon2`) is still treated as a name, and
 `Charizard V` isn't split apart. The rules are pinned down in `tests/`.
+
+## Searching your collection
+
+The box above the grid in **My vault** searches what you already own, and understands
+the same shapes as the catalogue search:
+
+| You type | What it finds |
+| --- | --- |
+| `purrloin` | any field — name, set, rarity, location, artist, grade |
+| `106` | collector number, exactly — not 14, 24 or 104 |
+| `106/189` | number 106; the denominator is accepted but not enforced, since the vault doesn't store printed totals the way the catalogue does |
+| `purrloin 106` | every word must match, each free to match a different field |
+| `base set 2` | matched as a set name — not as *series*, so a Fossil card (its series is called "Base") never turns up under "base" |
+
+A query is a set of words that must **all** match somewhere on the card, which is
+what makes `darkness ablaze 106` and `gastly base` behave the way they read. A bare
+number matches the collector number exactly rather than as a substring, because "4"
+as a substring would also catch every card numbered 14, 24, 40 through 49, and 104 —
+on a real collection, close to a third of it.
 
 ## Set completion
 
