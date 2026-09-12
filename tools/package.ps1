@@ -4,8 +4,8 @@
 #
 # The package contains the tracked source *plus* the web UI already built into
 # server/wwwroot. That's the point of it: installing then needs only the .NET
-# SDK on the target machine, matching BAMF, rather than also requiring Node.js
-# just to compile a frontend that was already compiled here.
+# SDK on the target machine, rather than also requiring Node.js just to compile
+# a frontend that was already compiled here.
 #
 # Nothing gitignored goes in -- the file list comes from git, so node_modules,
 # bin, obj and appsettings.Local.json (your API key) are excluded by
