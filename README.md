@@ -4,6 +4,8 @@ A self-hosted app for browsing, valuing and tracking a Pokémon TCG collection.
 Card artwork, set details, attack stats and market prices come from
 [pokemontcg.io](https://pokemontcg.io).
 
+![The vault, with a small sample collection](docs/screenshots/vault.png)
+
 - **ASP.NET Core 10 + SQLite** backend, published as a single self-contained binary
 - **React + TypeScript + Tailwind** frontend, built into the server's `wwwroot`
 - Runs on Windows, Linux and macOS, and is reachable from a phone on the same wifi
@@ -299,6 +301,8 @@ printing, with a crosshair and tooltip reading out all printings at the hovered
 date. Printings you own are drawn first. A **show table** toggle lists the same
 numbers, so nothing is reachable only by hovering.
 
+![Charizard's detail view, with eight days of price history charted](docs/screenshots/price-chart.png)
+
 A card gets its first price point the moment you add it, rather than waiting for
 the next daily cycle — otherwise a card added in the morning would show an empty
 chart all day. Until there are two days the chart shows today's figure and says
@@ -468,6 +472,8 @@ in full colour with a tick; everything missing is greyed out, so gaps are
 obvious at a glance. A **show only what I'm missing** toggle turns it into a
 want list, and the header totals what finishing the set would cost at current
 market prices. Adding a card from here updates the progress bar immediately.
+
+![Base set checklist: three owned cards in colour, the rest greyed out](docs/screenshots/set-completion.png)
 
 Set metadata is mirrored into SQLite, so the browser still works when the API is
 down. Card details for a set are fetched once and then served from the local
