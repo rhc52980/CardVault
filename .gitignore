@@ -43,3 +43,9 @@ Thumbs.db
 # Python
 __pycache__/
 *.pyc
+
+# Editor/tooling config that belongs to whoever's machine is building this,
+# not to the project.
+.claude/
+.vscode/
+.idea/
