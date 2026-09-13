@@ -4,6 +4,12 @@ A self-hosted app for browsing, valuing and tracking a Pokémon TCG collection.
 Card artwork, set details, attack stats and market prices come from
 [pokemontcg.io](https://pokemontcg.io).
 
+[![Latest release](https://img.shields.io/github/v/release/rhc52980/CardVault)](https://github.com/rhc52980/CardVault/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/rhc52980/CardVault/total)](https://github.com/rhc52980/CardVault/releases)
+[![Build and test](https://github.com/rhc52980/CardVault/actions/workflows/ci.yml/badge.svg)](https://github.com/rhc52980/CardVault/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+![Platforms](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey)
+
 ![The vault, with a small sample collection](docs/screenshots/vault.png)
 
 - **ASP.NET Core 10 + SQLite** backend, published as a single self-contained binary
@@ -701,6 +707,14 @@ with `sc.exe delete PokemonVault` (elevated), then delete
 `%LOCALAPPDATA%\PokemonVault` and `C:\PokemonVault`.
 
 ## Installing it
+
+**Just want to run it?** Download a package from the
+[latest release](https://github.com/rhc52980/CardVault/releases/latest), extract
+it, and run `CardVault` — the web UI is already built into it, so neither the
+.NET SDK nor Node is needed. Then open <http://localhost:5188>.
+
+The installers below do more: they build from source and register it as a
+service that starts at boot.
 
 **Windows** — double-click `install\Install-CardVault.bat`. It elevates,
 builds the UI and server, installs to `C:\CardVault`, registers a

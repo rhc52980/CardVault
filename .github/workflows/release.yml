@@ -1,0 +1,143 @@
+# Builds CardVault for Windows and Linux and attaches the results to the release.
+#
+# Triggered by pushing a version tag:
+#
+#   git tag v1.30.2 ; git push origin v1.30.2
+#
+# The point is that a user should not need the .NET SDK and Node just to run it.
+# install.sh and update.ps1 both build from source and say "a release package
+# ships the web UI already built" - this is what produces those packages.
+#
+# Can also be run by hand from the Actions tab (workflow_dispatch) to check the
+# build without cutting a release.
+
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write        # needed to create the release and upload assets
+
+jobs:
+  build:
+    name: Build ${{ matrix.rid }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false   # one platform failing shouldn't hide the other's result
+      matrix:
+        include:
+          - rid: win-x64
+            archive: zip
+          - rid: linux-x64
+            archive: tar.gz
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      # The version lives in server/CardVault.csproj, not in the tag - the backup
+      # service reads it to decide whether to snapshot the database before an
+      # update, so the binary's own number is the one that matters.
+      - name: Read version from CardVault.csproj
+        id: ver
+        run: |
+          VERSION=$(grep -oPm1 '(?<=<Version>)[^<]+' server/CardVault.csproj)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Building CardVault $VERSION for ${{ matrix.rid }}"
+
+      # Fail loudly if the tag and the declared version disagree, rather than
+      # publishing a v1.31.0 release containing a binary that says 1.30.2.
+      - name: Check the tag matches the declared version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          TAG="${GITHUB_REF#refs/tags/v}"
+          if [ "$TAG" != "${{ steps.ver.outputs.version }}" ]; then
+            echo "::error::Tag v$TAG does not match <Version>${{ steps.ver.outputs.version }}</Version> in server/CardVault.csproj"
+            exit 1
+          fi
+
+      # Must run before publish: vite writes into server/wwwroot, and that is what
+      # dotnet publish then picks up as static content.
+      - name: Build the client
+        working-directory: client
+        run: |
+          npm ci
+          npm run build
+
+      # Same flags install.sh and update.ps1 use, so a release package and a
+      # build-from-source install produce the same thing.
+      - name: Publish
+        run: |
+          dotnet publish server/CardVault.csproj \
+            -c Release \
+            -r ${{ matrix.rid }} \
+            -p:PublishSingleFile=true \
+            --self-contained true \
+            -o out
+
+      # A user should get a runnable folder, not a pile of files. Everything goes
+      # inside a named directory so extracting doesn't scatter files into whatever
+      # folder they happened to be in.
+      - name: Stage the package
+        run: |
+          NAME="CardVault-${{ steps.ver.outputs.version }}-${{ matrix.rid }}"
+          echo "name=$NAME" >> "$GITHUB_ENV"
+          mkdir -p "stage/$NAME"
+          cp -r out/* "stage/$NAME/"
+          cp LICENSE README.md "stage/$NAME/"
+          # The Windows .bat helpers are deliberately not shipped: they drive the
+          # service that Install-CardVault.bat creates, and that installer builds
+          # from source. In a binary package they would point at a file that isn't
+          # there. Running CardVault.exe directly needs no service.
+          if [ "${{ matrix.rid }}" = "linux-x64" ]; then
+            # Useful as-is: the unit already points at a published binary in
+            # /opt/card-vault, which is exactly what this archive contains.
+            cp linux/card-vault.service "stage/$NAME/"
+            chmod +x "stage/$NAME/CardVault"
+          fi
+          # Debug symbols aren't wanted in a release package.
+          rm -f "stage/$NAME"/*.pdb
+          ls -la "stage/$NAME"
+
+      - name: Archive
+        id: pack
+        run: |
+          NAME="$name"
+          if [ "${{ matrix.archive }}" = "zip" ]; then
+            (cd stage && zip -qr "../$NAME.zip" "$NAME")
+            echo "asset=$NAME.zip" >> "$GITHUB_OUTPUT"
+          else
+            tar -czf "$NAME.tar.gz" -C stage "$NAME"
+            echo "asset=$NAME.tar.gz" >> "$GITHUB_OUTPUT"
+          fi
+          ls -lh "$NAME".*
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.pack.outputs.asset }}
+          path: ${{ steps.pack.outputs.asset }}
+          retention-days: 14
+
+      # Only on a tag. A manual run builds and uploads to the Actions tab, so the
+      # workflow can be tested without publishing anything.
+      - name: Attach to the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          gh release view "$TAG" >/dev/null 2>&1 || \
+            gh release create "$TAG" --title "CardVault ${{ steps.ver.outputs.version }}" --generate-notes
+          gh release upload "$TAG" "${{ steps.pack.outputs.asset }}" --clobber
