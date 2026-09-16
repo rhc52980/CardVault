@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api } from './api'
+import { feedbackHref } from './lib/feedback'
 // Imported rather than referenced as /logo.png so Vite content-hashes the URL.
 // A fixed name in public/ let a cached copy of the old artwork survive several
 // releases, because nothing ever told the browser the picture had changed.
@@ -201,12 +202,24 @@ export default function App() {
           )}
         </main>
 
-        <footer className="mt-16 border-t border-edge pt-5 text-xs text-mute">
-          Card data and prices from{' '}
-          <a href="https://pokemontcg.io" target="_blank" rel="noreferrer" className="text-arc hover:underline">
-            pokemontcg.io
+        <footer className="mt-16 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2 border-t border-edge pt-5 text-xs text-mute">
+          <span>
+            Card data and prices from{' '}
+            <a href="https://pokemontcg.io" target="_blank" rel="noreferrer" className="text-arc hover:underline">
+              pokemontcg.io
+            </a>
+            . Prices are TCGplayer market values and refresh daily.
+          </span>
+          {/* Bottom-right, out of the way. It fetches nothing until clicked. */}
+          <a
+            href={feedbackHref(appVersion)}
+            target="_blank"
+            rel="noopener noreferrer"
+            title="Report a bug or suggest an idea on GitHub (opens in a new tab)"
+            className="whitespace-nowrap hover:text-arc hover:underline"
+          >
+            Feedback
           </a>
-          . Prices are TCGplayer market values and refresh daily.
         </footer>
       </div>
     </div>

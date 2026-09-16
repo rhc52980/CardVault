@@ -738,6 +738,11 @@ default — nothing leaves the machine unless you turn it on — and it only eve
 reads: you get a badge linking to the release, and run the updater yourself.
 Bump `<Version>` in `server/CardVault.csproj` when you cut one.
 
+The **Feedback** link at the bottom right of every page opens a new GitHub
+issue, pre-filled with your CardVault version and browser. Nothing from your
+collection goes into it, nothing is sent until you click it, and you see the
+whole form before posting.
+
 **Linux** (Debian/Ubuntu, a Proxmox container, a Pi):
 
 ```bash
